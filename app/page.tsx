@@ -72,6 +72,15 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDueDate, setEditingDueDate] = useState<string>("");
 
+  // 日付の入力文字列を 自動で YYYY/MM/DD フォーマットに整形する関数
+  const formatDateInput = (value: string) => {
+    // 数字以外の文字をすべて除去
+    const nums = value.replace(/\D/g, "");
+    if (nums.length <= 4) return nums;
+    if (nums.length <= 6) return `${nums.slice(0, 4)}/${nums.slice(4)}`;
+    return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
+  };
+
   // Firestoreから買い物リストをリアルタイム取得
   useEffect(() => {
     const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
@@ -241,7 +250,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 期限（ショートカットボタン ＋ カレンダー・手入力） */}
+          {/* 期限（ショートカットボタン ＋ 自動フォーマット手入力） */}
           <div className="space-y-1.5 pt-1 text-xs">
             <div className="flex items-center gap-1 text-slate-500 font-medium">
               <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
@@ -283,13 +292,15 @@ export default function Home() {
                 なし
               </button>
 
-              {/* 日付入力欄（文字手入力可能） */}
+              {/* 数字キーボード優先 ＋ スラッシュ自動補完入力欄 */}
               <div className="flex items-center gap-1 ml-auto">
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                  placeholder="YYYY/MM/DD"
+                  onChange={(e) => setDueDate(formatDateInput(e.target.value))}
+                  placeholder="20261001"
+                  maxLength={10}
                   className="w-28 px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
                 {dueDate && (
@@ -396,7 +407,7 @@ export default function Home() {
                           </div>
                         </td>
 
-                        {/* 2. お店（先頭2文字表示） */}
+                        {/* 2. お店 */}
                         <td className="p-1 border-r border-slate-800 align-middle text-center">
                           <span className="inline-block px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
                             {item.store ? item.store.slice(0, 2) : "その"}
@@ -418,16 +429,18 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 4. 期限（インライン編集機能つき） */}
+                        {/* 4. 期限（インライン編集＋自動補完） */}
                         <td className="p-1 text-center align-middle text-slate-700 font-mono text-[11px] sm:text-xs">
                           {editingId === item.id ? (
                             <div className="flex items-center justify-center gap-1">
                               <input
                                 type="text"
+                                inputMode="numeric"
                                 value={editingDueDate}
-                                onChange={(e) => setEditingDueDate(e.target.value)}
+                                onChange={(e) => setEditingDueDate(formatDateInput(e.target.value))}
+                                maxLength={10}
                                 className="w-20 px-1 py-0.5 text-[11px] border border-emerald-500 rounded bg-white text-slate-800 focus:outline-none"
-                                placeholder="YYYY/MM/DD"
+                                placeholder="20261001"
                                 autoFocus
                               />
                               <button
