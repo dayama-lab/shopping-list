@@ -25,10 +25,19 @@ import {
   Filter,
   Calendar,
   AlertCircle,
+  X,
 } from "lucide-react";
 
 // 店舗カテゴリーの定義
-const STORES = ["すべて", "サミット", "まいばすけっと", "ドラッグストア", "100均", "AVE", "その他"] as const;
+const STORES = [
+  "すべて",
+  "サミット",
+  "まいばすけっと",
+  "ドラッグストア",
+  "100均",
+  "AVE",
+  "その他",
+] as const;
 // 優先度の定義
 const PRIORITIES = ["高", "中", "低"] as const;
 
@@ -67,7 +76,7 @@ export default function Home() {
         dueDate: doc.data().dueDate || "",
       }));
 
-      // 期限（dueDate）が近い順（昇順）に並び替え
+      // 期限（dueDate）が近い順（昇順）に並び替え（未設定は一番最後）
       list.sort((a, b) => {
         const dateA = a.dueDate || "";
         const dateB = b.dueDate || "";
@@ -119,20 +128,22 @@ export default function Home() {
   });
 
   return (
-    <main className="w-full min-h-screen bg-slate-50 p-3 sm:p-6 pb-20">
+    <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
       <div className="max-w-2xl mx-auto">
         {/* ヘッダー */}
-        <header className="flex items-center gap-2 mb-6 pt-2">
+        <header className="flex items-center gap-2 mb-4 pt-2">
           <div className="p-2 bg-emerald-100 rounded-xl">
             <ShoppingBag className="w-6 h-6 text-emerald-600" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">買い物リスト</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
+            買い物リスト
+          </h1>
         </header>
 
         {/* 登録フォーム */}
         <form
           onSubmit={addItem}
-          className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs mb-6 space-y-4"
+          className="bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-xs mb-4 space-y-3"
         >
           <div className="flex gap-2">
             <input
@@ -140,19 +151,19 @@ export default function Home() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="買うものを入力..."
-              className="flex-1 px-4 py-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-base"
+              className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
             />
             <button
               type="submit"
-              className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-xs active:scale-95 transition flex items-center justify-center min-w-[60px]"
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-xs active:scale-95 transition flex items-center justify-center min-w-[50px]"
             >
-              <Plus className="w-6 h-6" />
+              <Plus className="w-5 h-5" />
             </button>
           </div>
 
           {/* 店名タグ */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-1" />
+            <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
             {STORES.filter((s) => s !== "すべて").map((storeName) => (
               <button
                 key={storeName}
@@ -160,7 +171,7 @@ export default function Home() {
                 onClick={() =>
                   setSelectedStore(selectedStore === storeName ? null : storeName)
                 }
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition border ${
+                className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
                   selectedStore === storeName
                     ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
@@ -172,8 +183,8 @@ export default function Home() {
           </div>
 
           {/* 優先度 ＆ 期限 */}
-          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100 text-xs">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+            <div className="flex items-center gap-1.5">
               <span className="text-slate-500 font-medium flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" /> 優先度:
               </span>
@@ -183,7 +194,7 @@ export default function Home() {
                     key={p}
                     type="button"
                     onClick={() => setSelectedPriority(p)}
-                    className={`px-2.5 py-1 rounded-md font-medium border transition ${
+                    className={`px-2 py-0.5 rounded font-medium border transition ${
                       selectedPriority === p
                         ? p === "高"
                           ? "bg-red-500 text-white border-red-500"
@@ -199,33 +210,46 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* 期限（日付選択＋クリア機能） */}
+            <div className="flex items-center gap-1.5">
               <span className="text-slate-500 font-medium flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" /> 期限:
               </span>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="px-2 py-1 border border-slate-300 rounded-md bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="px-2 py-1 border border-slate-300 rounded-md bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                {dueDate && (
+                  <button
+                    type="button"
+                    onClick={() => setDueDate("")}
+                    className="p-1 text-xs text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded"
+                    title="期限を「なし（-）」に戻す"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </form>
 
         {/* 絞り込みタブ */}
-        <div className="mb-4">
-          <div className="flex items-center gap-1 text-xs text-slate-500 mb-2 font-medium">
+        <div className="mb-3">
+          <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5 font-medium">
             <Filter className="w-3.5 h-3.5" />
             <span>表示するお店で絞り込み:</span>
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
             {STORES.map((storeName) => (
               <button
                 key={storeName}
                 type="button"
                 onClick={() => setFilterStore(storeName)}
-                className={`px-3 py-1.5 rounded-full whitespace-nowrap border transition ${
+                className={`px-2.5 py-1 rounded-full whitespace-nowrap border transition ${
                   filterStore === storeName
                     ? "bg-slate-800 text-white border-slate-800 font-medium shadow-xs"
                     : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
@@ -240,16 +264,22 @@ export default function Home() {
         {/* テーブル表示 */}
         <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse table-fixed">
               <thead>
-                <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs sm:text-sm font-bold">
-                  <th className="py-3 px-3 border-r border-slate-800 w-[45%]">必要なもの</th>
-                  <th className="py-3 px-3 border-r border-slate-800 w-[25%]">お店</th>
-                  <th className="py-3 px-3 border-r border-slate-800 text-center w-[12%]">優先度</th>
-                  <th className="py-3 px-3 text-center w-[18%]">期限</th>
+                <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs font-bold">
+                  <th className="py-2.5 px-2 border-r border-slate-800 w-[42%] text-center">
+                    必要なもの
+                  </th>
+                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[18%]">
+                    お店
+                  </th>
+                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[15%]">
+                    優先度
+                  </th>
+                  <th className="py-2.5 px-1 text-center w-[25%]">期限</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-xs sm:text-sm">
+              <tbody className="divide-y divide-slate-800 text-xs">
                 {filteredItems.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="text-center text-slate-400 py-8">
@@ -262,21 +292,25 @@ export default function Home() {
                   filteredItems.map((item) => (
                     <React.Fragment key={item.id}>
                       <tr className="hover:bg-slate-50/80 transition">
-                        <td className="p-3 border-r border-slate-800 align-middle">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-slate-800 text-base break-all">
+                        {/* 1. 必要なもの（品名と、その下にアイコン配置） */}
+                        <td className="p-2 border-r border-slate-800 align-middle">
+                          <div className="flex flex-col gap-1">
+                            {/* 上段：品名 */}
+                            <span className="font-bold text-slate-800 text-sm break-all leading-tight">
                               {item.text}
                             </span>
-                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                            {/* 下段：コメント・削除ボタン */}
+                            <div className="flex items-center gap-2 pt-0.5">
                               <button
                                 onClick={() => toggleComment(item.id)}
-                                className={`p-1.5 rounded-md transition flex items-center gap-0.5 text-xs ${
+                                className={`flex items-center gap-0.5 text-[11px] p-0.5 rounded transition ${
                                   openCommentId === item.id
-                                    ? "bg-emerald-100 text-emerald-700"
+                                    ? "text-emerald-700 bg-emerald-100"
                                     : "text-emerald-600 hover:bg-emerald-50"
                                 }`}
+                                title="コメント"
                               >
-                                <MessageSquare className="w-4 h-4" />
+                                <MessageSquare className="w-3.5 h-3.5" />
                                 {openCommentId === item.id ? (
                                   <ChevronUp className="w-3 h-3" />
                                 ) : (
@@ -285,21 +319,24 @@ export default function Home() {
                               </button>
                               <button
                                 onClick={() => deleteItem(item.id)}
-                                className="p-1.5 text-slate-400 hover:text-red-500 rounded-md hover:bg-red-50 transition"
+                                className="text-slate-400 hover:text-red-500 p-0.5 rounded hover:bg-red-50 transition"
+                                title="削除"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </div>
                         </td>
 
-                        <td className="p-3 border-r border-slate-800 align-middle">
-                          <span className="inline-block px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
-                            {item.store}
+                        {/* 2. お店（先頭2文字だけ表示） */}
+                        <td className="p-1 border-r border-slate-800 align-middle text-center">
+                          <span className="inline-block px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
+                            {item.store ? item.store.slice(0, 2) : "その"}
                           </span>
                         </td>
 
-                        <td className="p-3 border-r border-slate-800 text-center align-middle font-medium">
+                        {/* 3. 優先度 */}
+                        <td className="p-1 border-r border-slate-800 text-center align-middle font-medium">
                           <span
                             className={
                               item.priority === "高"
@@ -313,11 +350,13 @@ export default function Home() {
                           </span>
                         </td>
 
-                        <td className="p-3 text-center align-middle text-slate-700 font-mono text-xs whitespace-pre-line">
+                        {/* 4. 期限 */}
+                        <td className="p-1 text-center align-middle text-slate-700 font-mono text-[11px] sm:text-xs">
                           {item.dueDate ? item.dueDate.replace(/-/g, "/") : "-"}
                         </td>
                       </tr>
 
+                      {/* コメントアコーディオンエリア */}
                       {openCommentId === item.id && (
                         <tr>
                           <td colSpan={4} className="bg-slate-50 p-0 border-b border-slate-800">
@@ -337,6 +376,7 @@ export default function Home() {
   );
 }
 
+// コメント欄コンポーネント
 function CommentSection({ itemId }: { itemId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -374,20 +414,20 @@ function CommentSection({ itemId }: { itemId: string }) {
   };
 
   return (
-    <div className="p-3 bg-slate-100/70 border-t border-slate-300 space-y-2">
-      <div className="space-y-1.5 max-h-36 overflow-y-auto">
+    <div className="p-2.5 bg-slate-100/70 border-t border-slate-300 space-y-2">
+      <div className="space-y-1 max-h-32 overflow-y-auto">
         {comments.length === 0 ? (
           <p className="text-xs text-slate-400 italic px-1">コメントはまだありません。</p>
         ) : (
           comments.map((comment) => (
             <div
               key={comment.id}
-              className="flex items-center justify-between bg-white p-2 rounded-md border border-slate-200 text-xs text-slate-700 shadow-2xs"
+              className="flex items-center justify-between bg-white p-1.5 rounded border border-slate-200 text-xs text-slate-700 shadow-2xs"
             >
               <p className="break-all pr-2">{comment.text}</p>
               <button
                 onClick={() => deleteComment(comment.id)}
-                className="text-slate-300 hover:text-red-500 p-1 rounded transition flex-shrink-0"
+                className="text-slate-300 hover:text-red-500 p-0.5 rounded transition flex-shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -396,17 +436,17 @@ function CommentSection({ itemId }: { itemId: string }) {
         )}
       </div>
 
-      <form onSubmit={addComment} className="flex gap-2">
+      <form onSubmit={addComment} className="flex gap-1.5">
         <input
           type="text"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="コメントを入力..."
-          className="flex-1 px-3 py-2 border border-slate-300 rounded-md bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          className="flex-1 px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <button
           type="submit"
-          className="px-3 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
+          className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
         >
           <Send className="w-3.5 h-3.5 text-white" />
         </button>
