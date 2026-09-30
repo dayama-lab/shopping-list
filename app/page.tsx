@@ -23,10 +23,14 @@ import {
   ChevronUp,
   Store,
   Filter,
+  Calendar,
+  AlertCircle,
 } from "lucide-react";
 
 // 店舗カテゴリーの定義
-const STORES = ["すべて", "サミット", "まいばすけっと", "100均", "AVE", "その他"] as const;
+const STORES = ["すべて", "サミット", "まいばすけっと", "ドラッグストア", "100均", "AVE", "その他"] as const;
+// 優先度の定義
+const PRIORITIES = ["高", "中", "低"] as const;
 
 interface Comment {
   id: string;
@@ -38,13 +42,16 @@ interface Item {
   id: string;
   text: string;
   store?: string;
+  priority?: string; // 優先度（高・中・低）
+  dueDate?: string;  // 期限（YYYY-MM-DD）
 }
 
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
-  // 🔥 追加時の選択店舗（初期値は未選択とするため null に設定）
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<string>("中");
+  const [dueDate, setDueDate] = useState<string>("");
   const [filterStore, setFilterStore] = useState<string>("すべて");
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
@@ -56,7 +63,18 @@ export default function Home() {
         id: doc.id,
         text: doc.data().text,
         store: doc.data().store || "その他",
+        priority: doc.data().priority || "中",
+        dueDate: doc.data().dueDate || "",
       }));
+
+      // 🔥 期限（dueDate）が近い順（昇順）に並び替え（未設定は最後へ）
+      list.sort((a, b) => {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      });
+
       setItems(list);
     });
 
@@ -70,13 +88,17 @@ export default function Home() {
 
     await addDoc(collection(db, "items"), {
       text: text.trim(),
-      store: selectedStore || "その他", // 店舗が選ばれていない場合は「その他」で保存
+      store: selectedStore || "その他",
+      priority: selectedPriority,
+      dueDate: dueDate || "",
       createdAt: serverTimestamp(),
     });
 
-    // 🔥 入力フィールドと店舗選択をリセット（解除）
+    // フォームリセット
     setText("");
     setSelectedStore(null);
+    setSelectedPriority("中");
+    setDueDate("");
   };
 
   // アイテムの削除
@@ -96,28 +118,35 @@ export default function Home() {
   });
 
   return (
-    <main className="w-full min-h-screen bg-slate-50 p-4 pb-20">
-      <div className="max-w-md mx-auto">
-        <header className="flex items-center gap-2 mb-6 pt-4">
-          <ShoppingBag className="w-6 h-6 text-emerald-600" />
-          <h1 className="text-xl font-bold text-slate-800">買い物リスト</h1>
+    <main className="w-full min-h-screen bg-slate-50 p-3 sm:p-6 pb-20">
+      <div className="max-w-2xl mx-auto">
+        {/* ヘッダー */}
+        <header className="flex items-center gap-2 mb-6 pt-2">
+          <div className="p-2 bg-emerald-100 rounded-xl">
+            <ShoppingBag className="w-6 h-6 text-emerald-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">買い物リスト</h1>
         </header>
 
         {/* 登録フォーム */}
-        <form onSubmit={addItem} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6 space-y-3">
+        <form
+          onSubmit={addItem}
+          className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs mb-6 space-y-4"
+        >
+          {/* メイン入力＋追加ボタン */}
           <div className="flex gap-2">
             <input
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="買うものを入力..."
-              className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+              className="flex-1 px-4 py-3 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-base"
             />
             <button
               type="submit"
-              className="px-5 py-2.5 bg-emerald-600 text-white font-medium rounded-xl shadow-sm hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
+              className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-xs active:scale-95 transition flex items-center justify-center min-w-[60px]"
             >
-              <Plus className="w-5 h-5 text-white" />
+              <Plus className="w-6 h-6" />
             </button>
           </div>
 
@@ -128,27 +157,71 @@ export default function Home() {
               <button
                 key={storeName}
                 type="button"
-                // 🔥 同じボタンをもう一度押すと選択解除できるトグル機能も追加
-                onClick={() => setSelectedStore(selectedStore === storeName ? null : storeName)}
-                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition ${
+                onClick={() =>
+                  setSelectedStore(selectedStore === storeName ? null : storeName)
+                }
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition border ${
                   selectedStore === storeName
-                    ? "bg-emerald-600 text-white font-medium shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                 }`}
               >
                 {storeName}
               </button>
             ))}
           </div>
+
+          {/* 優先度 ＆ 期限入力 */}
+          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100 text-xs">
+            {/* 優先度 */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-medium flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" /> 優先度:
+              </span>
+              <div className="flex gap-1">
+                {PRIORITIES.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setSelectedPriority(p)}
+                    className={`px-2.5 py-1 rounded-md font-medium border transition ${
+                      selectedPriority === p
+                        ? p === "高"
+                          ? "bg-red-500 text-white border-red-500"
+                          : p === "中"
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-blue-500 text-white border-blue-500"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 期限 */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-medium flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5" /> 期限:
+              </span>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="px-2 py-1 border border-slate-300 rounded-md bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
         </form>
 
-        {/* 絞り込み（フィルター）エリア */}
+        {/* 店舗絞り込みタブ */}
         <div className="mb-4">
           <div className="flex items-center gap-1 text-xs text-slate-500 mb-2 font-medium">
             <Filter className="w-3.5 h-3.5" />
             <span>表示するお店で絞り込み:</span>
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 text-xs">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             {STORES.map((storeName) => (
               <button
                 key={storeName}
@@ -166,81 +239,126 @@ export default function Home() {
           </div>
         </div>
 
-        {/* リスト一覧 */}
-        <div className="space-y-3">
-          {filteredItems.length === 0 ? (
-            <p className="text-center text-slate-400 py-8 text-sm">
-              {filterStore === "すべて"
-                ? "買うものはすべて揃っています 🎉"
-                : `「${filterStore}」で買うものはありません 🎉`}
-            </p>
-          ) : (
-            filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden transition"
-              >
-                {/* メインアイテム表示 */}
-                <div className="flex items-center justify-between p-4">
-                  <div className="flex flex-col gap-1 pr-2">
-                    <span className="text-slate-800 font-medium break-all">
-                      {item.text}
-                    </span>
-                    {/* 店舗バッジ表示 */}
-                    <span className="inline-block w-max px-2 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 rounded-md">
-                      {item.store}
-                    </span>
-                  </div>
+        {/* 表（テーブル）形式のリスト一覧 */}
+        <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs sm:text-sm font-bold">
+                  <th className="py-3 px-3 border-r border-slate-800 w-[45%]">
+                    必要なもの
+                  </th>
+                  <th className="py-3 px-3 border-r border-slate-800 w-[25%]">
+                    お店
+                  </th>
+                  <th className="py-3 px-3 border-r border-slate-800 text-center w-[12%]">
+                    優先度
+                  </th>
+                  <th className="py-3 px-3 text-center w-[18%]">期限</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-xs sm:text-sm">
+                {filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="text-center text-slate-400 py-8">
+                      {filterStore === "すべて"
+                        ? "買うものはすべて揃っています 🎉"
+                        : `「${filterStore}」で買うものはありません 🎉`}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredItems.map((item) => (
+                    <React.Fragment key={item.id}>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        {/* 必要なもの ＋ コメント・削除ボタン */}
+                        <td className="p-3 border-r border-slate-800 align-middle">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-slate-800 text-base break-all">
+                              {item.text}
+                            </span>
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              {/* コメントボタン */}
+                              <button
+                                onClick={() => toggleComment(item.id)}
+                                className={`p-1.5 rounded-md transition flex items-center gap-0.5 text-xs ${
+                                  openCommentId === item.id
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "text-emerald-600 hover:bg-emerald-50"
+                                }`}
+                                title="コメント"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                                {openCommentId === item.id ? (
+                                  <ChevronUp className="w-3 h-3" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3" />
+                                )}
+                              </button>
+                              {/* 削除ボタン */}
+                              <button
+                                onClick={() => deleteItem(item.id)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 rounded-md hover:bg-red-50 transition"
+                                title="削除"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
 
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {/* コメントボタン */}
-                    <button
-                      onClick={() => toggleComment(item.id)}
-                      className={`p-2 rounded-lg transition flex items-center gap-1 text-xs ${
-                        openCommentId === item.id
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
-                      title="コメントを表示"
-                    >
-                      <MessageSquare className="w-5 h-5" />
-                      {openCommentId === item.id ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
+                        {/* お店 */}
+                        <td className="p-3 border-r border-slate-800 align-middle">
+                          <span className="inline-block px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
+                            {item.store}
+                          </span>
+                        </td>
+
+                        {/* 優先度 */}
+                        <td className="p-3 border-r border-slate-800 text-center align-middle font-medium">
+                          <span
+                            className={
+                              item.priority === "高"
+                                ? "text-red-600 font-bold"
+                                : item.priority === "中"
+                                ? "text-amber-600"
+                                : "text-slate-500"
+                            }
+                          >
+                            {item.priority || "中"}
+                          </span>
+                        </td>
+
+                        {/* 期限 */}
+                        <td className="p-3 text-center align-middle text-slate-700 font-mono text-xs whitespace-pre-line">
+                          {item.dueDate ? item.dueDate.replace(/-/g, "/") : "-"}
+                        </td>
+                      </tr>
+
+                      {/* コメントアコーディオンエリア */}
+                      {openCommentId === item.id && (
+                        <tr>
+                          <td colSpan={4} className="bg-slate-50 p-0 border-b border-slate-800">
+                            <CommentSection itemId={item.id} />
+                          </td>
+                        </tr>
                       )}
-                    </button>
-
-                    {/* アイテム削除ボタン */}
-                    <button
-                      onClick={() => deleteItem(item.id)}
-                      className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                      title="買い出し完了（削除）"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* コメントエリア（開いている時だけ表示） */}
-                {openCommentId === item.id && (
-                  <CommentSection itemId={item.id} />
+                    </React.Fragment>
+                  ))
                 )}
-              </div>
-            ))
-          )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </main>
   );
 }
 
-// コメント欄のコンポーネント
+// コメント欄コンポーネント
 function CommentSection({ itemId }: { itemId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
 
-  // Firestoreから該当アイテムのコメント一覧を取得
   useEffect(() => {
     const q = query(
       collection(db, "items", itemId, "comments"),
@@ -258,7 +376,6 @@ function CommentSection({ itemId }: { itemId: string }) {
     return () => unsubscribe();
   }, [itemId]);
 
-  // コメントの投稿
   const addComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -270,30 +387,27 @@ function CommentSection({ itemId }: { itemId: string }) {
     setCommentText("");
   };
 
-  // コメントの削除
   const deleteComment = async (commentId: string) => {
     await deleteDoc(doc(db, "items", itemId, "comments", commentId));
   };
 
   return (
-    <div className="bg-slate-50 p-4 border-t border-slate-100 space-y-3">
-      {/* コメント一覧 */}
-      <div className="space-y-2 max-h-40 overflow-y-auto">
+    <div className="p-3 bg-slate-100/70 border-t border-slate-300 space-y-2">
+      <div className="space-y-1.5 max-h-36 overflow-y-auto">
         {comments.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">
-            コメントはまだありません。「マミーノが買います」などを入力できます。
+          <p className="text-xs text-slate-400 italic px-1">
+            コメントはまだありません。
           </p>
         ) : (
           comments.map((comment) => (
             <div
               key={comment.id}
-              className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-100 text-xs text-slate-700 shadow-2xs group"
+              className="flex items-center justify-between bg-white p-2 rounded-md border border-slate-200 text-xs text-slate-700 shadow-2xs"
             >
               <p className="break-all pr-2">{comment.text}</p>
               <button
                 onClick={() => deleteComment(comment.id)}
                 className="text-slate-300 hover:text-red-500 p-1 rounded transition flex-shrink-0"
-                title="コメントを削除"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -302,20 +416,19 @@ function CommentSection({ itemId }: { itemId: string }) {
         )}
       </div>
 
-      {/* コメント入力フォーム */}
       <form onSubmit={addComment} className="flex gap-2">
         <input
           type="text"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          placeholder="コメントを入力（例: マミーノが買います）"
-          className="flex-1 px-3 py-2 border border-slate-200 rounded-lg bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          placeholder="コメントを入力..."
+          className="flex-1 px-3 py-1.5 border border-slate-300 rounded-md bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <button
           type="submit"
-          className="px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
+          className="px-3 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
         >
-          <Send className="w-3.5 h-3.5 text-white" />
+          <Send className="w-3.5 h-3.5" />
         </button>
       </form>
     </div>
