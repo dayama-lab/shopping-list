@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "買い物リストアプリ",
+  title: "買い物リスト",
   description: "山田家で使えるリアルタイム買い物リスト",
   icons: {
     icon: "/shoppinglist_アイコン.JPG",
