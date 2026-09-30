@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -42,8 +42,8 @@ interface Item {
   id: string;
   text: string;
   store?: string;
-  priority?: string; // 優先度（高・中・低）
-  dueDate?: string;  // 期限（YYYY-MM-DD）
+  priority?: string;
+  dueDate?: string;
 }
 
 export default function Home() {
@@ -61,18 +61,20 @@ export default function Home() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: Item[] = snapshot.docs.map((doc) => ({
         id: doc.id,
-        text: doc.data().text,
+        text: doc.data().text || "",
         store: doc.data().store || "その他",
         priority: doc.data().priority || "中",
         dueDate: doc.data().dueDate || "",
       }));
 
-      // 🔥 期限（dueDate）が近い順（昇順）に並び替え（未設定は最後へ）
+      // 期限（dueDate）が近い順（昇順）に並び替え
       list.sort((a, b) => {
-        if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return a.dueDate.localeCompare(b.dueDate);
+        const dateA = a.dueDate || "";
+        const dateB = b.dueDate || "";
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA.localeCompare(dateB);
       });
 
       setItems(list);
@@ -94,7 +96,6 @@ export default function Home() {
       createdAt: serverTimestamp(),
     });
 
-    // フォームリセット
     setText("");
     setSelectedStore(null);
     setSelectedPriority("中");
@@ -133,7 +134,6 @@ export default function Home() {
           onSubmit={addItem}
           className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs mb-6 space-y-4"
         >
-          {/* メイン入力＋追加ボタン */}
           <div className="flex gap-2">
             <input
               type="text"
@@ -150,7 +150,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 店名タグの選択 */}
+          {/* 店名タグ */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-1" />
             {STORES.filter((s) => s !== "すべて").map((storeName) => (
@@ -171,9 +171,8 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 優先度 ＆ 期限入力 */}
+          {/* 優先度 ＆ 期限 */}
           <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-100 text-xs">
-            {/* 優先度 */}
             <div className="flex items-center gap-2">
               <span className="text-slate-500 font-medium flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" /> 優先度:
@@ -200,7 +199,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 期限 */}
             <div className="flex items-center gap-2">
               <span className="text-slate-500 font-medium flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" /> 期限:
@@ -215,7 +213,7 @@ export default function Home() {
           </div>
         </form>
 
-        {/* 店舗絞り込みタブ */}
+        {/* 絞り込みタブ */}
         <div className="mb-4">
           <div className="flex items-center gap-1 text-xs text-slate-500 mb-2 font-medium">
             <Filter className="w-3.5 h-3.5" />
@@ -239,21 +237,15 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 表（テーブル）形式のリスト一覧 */}
+        {/* テーブル表示 */}
         <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs sm:text-sm font-bold">
-                  <th className="py-3 px-3 border-r border-slate-800 w-[45%]">
-                    必要なもの
-                  </th>
-                  <th className="py-3 px-3 border-r border-slate-800 w-[25%]">
-                    お店
-                  </th>
-                  <th className="py-3 px-3 border-r border-slate-800 text-center w-[12%]">
-                    優先度
-                  </th>
+                  <th className="py-3 px-3 border-r border-slate-800 w-[45%]">必要なもの</th>
+                  <th className="py-3 px-3 border-r border-slate-800 w-[25%]">お店</th>
+                  <th className="py-3 px-3 border-r border-slate-800 text-center w-[12%]">優先度</th>
                   <th className="py-3 px-3 text-center w-[18%]">期限</th>
                 </tr>
               </thead>
@@ -270,14 +262,12 @@ export default function Home() {
                   filteredItems.map((item) => (
                     <React.Fragment key={item.id}>
                       <tr className="hover:bg-slate-50/80 transition">
-                        {/* 必要なもの ＋ コメント・削除ボタン */}
                         <td className="p-3 border-r border-slate-800 align-middle">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-bold text-slate-800 text-base break-all">
                               {item.text}
                             </span>
                             <div className="flex items-center gap-0.5 flex-shrink-0">
-                              {/* コメントボタン */}
                               <button
                                 onClick={() => toggleComment(item.id)}
                                 className={`p-1.5 rounded-md transition flex items-center gap-0.5 text-xs ${
@@ -285,7 +275,6 @@ export default function Home() {
                                     ? "bg-emerald-100 text-emerald-700"
                                     : "text-emerald-600 hover:bg-emerald-50"
                                 }`}
-                                title="コメント"
                               >
                                 <MessageSquare className="w-4 h-4" />
                                 {openCommentId === item.id ? (
@@ -294,11 +283,9 @@ export default function Home() {
                                   <ChevronDown className="w-3 h-3" />
                                 )}
                               </button>
-                              {/* 削除ボタン */}
                               <button
                                 onClick={() => deleteItem(item.id)}
                                 className="p-1.5 text-slate-400 hover:text-red-500 rounded-md hover:bg-red-50 transition"
-                                title="削除"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -306,14 +293,12 @@ export default function Home() {
                           </div>
                         </td>
 
-                        {/* お店 */}
                         <td className="p-3 border-r border-slate-800 align-middle">
                           <span className="inline-block px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
                             {item.store}
                           </span>
                         </td>
 
-                        {/* 優先度 */}
                         <td className="p-3 border-r border-slate-800 text-center align-middle font-medium">
                           <span
                             className={
@@ -328,13 +313,11 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 期限 */}
                         <td className="p-3 text-center align-middle text-slate-700 font-mono text-xs whitespace-pre-line">
                           {item.dueDate ? item.dueDate.replace(/-/g, "/") : "-"}
                         </td>
                       </tr>
 
-                      {/* コメントアコーディオンエリア */}
                       {openCommentId === item.id && (
                         <tr>
                           <td colSpan={4} className="bg-slate-50 p-0 border-b border-slate-800">
@@ -354,7 +337,6 @@ export default function Home() {
   );
 }
 
-// コメント欄コンポーネント
 function CommentSection({ itemId }: { itemId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -367,8 +349,8 @@ function CommentSection({ itemId }: { itemId: string }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: Comment[] = snapshot.docs.map((doc) => ({
         id: doc.id,
-        text: doc.data().text,
-        createdAt: doc.data().createdAt,
+        text: doc.data().text || "",
+        createdAt: doc.data().createdAt || null,
       }));
       setComments(list);
     });
@@ -395,9 +377,7 @@ function CommentSection({ itemId }: { itemId: string }) {
     <div className="p-3 bg-slate-100/70 border-t border-slate-300 space-y-2">
       <div className="space-y-1.5 max-h-36 overflow-y-auto">
         {comments.length === 0 ? (
-          <p className="text-xs text-slate-400 italic px-1">
-            コメントはまだありません。
-          </p>
+          <p className="text-xs text-slate-400 italic px-1">コメントはまだありません。</p>
         ) : (
           comments.map((comment) => (
             <div
@@ -422,13 +402,13 @@ function CommentSection({ itemId }: { itemId: string }) {
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="コメントを入力..."
-          className="flex-1 px-3 py-1.5 border border-slate-300 rounded-md bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          className="flex-1 px-3 py-2 border border-slate-300 rounded-md bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <button
           type="submit"
-          className="px-3 py-1.5 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
+          className="px-3 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
         >
-          <Send className="w-3.5 h-3.5" />
+          <Send className="w-3.5 h-3.5 text-white" />
         </button>
       </form>
     </div>
