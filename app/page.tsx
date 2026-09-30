@@ -44,7 +44,7 @@ interface Item {
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
-  const [selectedStore, setSelectedStore] = useState<string>("スーパー"); // 追加時のデフォルト店舗
+  const [selectedStore, setSelectedStore] = useState<string>("未設定"); // 追加時のデフォルト店舗
   const [filterStore, setFilterStore] = useState<string>("すべて"); // 絞り込み用の選択店舗
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
