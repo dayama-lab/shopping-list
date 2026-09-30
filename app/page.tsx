@@ -7,6 +7,7 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  updateDoc,
   onSnapshot,
   query,
   orderBy,
@@ -26,6 +27,8 @@ import {
   Calendar,
   AlertCircle,
   X,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 // 店舗カテゴリーの定義
@@ -65,6 +68,10 @@ export default function Home() {
   const [filterStore, setFilterStore] = useState<string>("すべて");
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
+  // 期限の編集状態管理
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDueDate, setEditingDueDate] = useState<string>("");
+
   // Firestoreから買い物リストをリアルタイム取得
   useEffect(() => {
     const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
@@ -100,7 +107,7 @@ export default function Home() {
     const yyyy = targetDate.getFullYear();
     const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
     const dd = String(targetDate.getDate()).padStart(2, "0");
-    setDueDate(`${yyyy}-${mm}-${dd}`);
+    setDueDate(`${yyyy}/${mm}/${dd}`);
   };
 
   // アイテムの追加
@@ -125,6 +132,20 @@ export default function Home() {
   // アイテムの削除
   const deleteItem = async (id: string) => {
     await deleteDoc(doc(db, "items", id));
+  };
+
+  // 期限（日付）の修正・保存
+  const startEditingDueDate = (id: string, currentDueDate: string) => {
+    setEditingId(id);
+    setEditingDueDate(currentDueDate || "");
+  };
+
+  const saveDueDate = async (id: string) => {
+    const itemRef = doc(db, "items", id);
+    await updateDoc(itemRef, {
+      dueDate: editingDueDate.trim(),
+    });
+    setEditingId(null);
   };
 
   // コメント開閉の切り替え
@@ -220,13 +241,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 期限（ショートカットボタン ＋ カレンダー入力） */}
+          {/* 期限（ショートカットボタン ＋ カレンダー・手入力） */}
           <div className="space-y-1.5 pt-1 text-xs">
             <div className="flex items-center gap-1 text-slate-500 font-medium">
               <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              {/* ワンタップショートカットボタン */}
               <button
                 type="button"
                 onClick={() => setShortcutDate(0)}
@@ -263,13 +283,14 @@ export default function Home() {
                 なし
               </button>
 
-              {/* 直接入力/カレンダー選択枠 */}
+              {/* 日付入力欄（文字手入力可能） */}
               <div className="flex items-center gap-1 ml-auto">
                 <input
-                  type="date"
+                  type="text"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  placeholder="YYYY/MM/DD"
+                  className="w-28 px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
                 {dueDate && (
                   <button
@@ -316,16 +337,16 @@ export default function Home() {
             <table className="w-full text-left border-collapse table-fixed">
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs font-bold">
-                  <th className="py-2.5 px-2 border-r border-slate-800 w-[42%] text-center">
+                  <th className="py-2.5 px-2 border-r border-slate-800 w-[38%] text-center">
                     必要なもの
                   </th>
-                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[18%]">
+                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[17%]">
                     お店
                   </th>
                   <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[15%]">
                     優先度
                   </th>
-                  <th className="py-2.5 px-1 text-center w-[25%]">期限</th>
+                  <th className="py-2.5 px-1 text-center w-[30%]">期限</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-xs">
@@ -397,9 +418,45 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 4. 期限 */}
+                        {/* 4. 期限（インライン編集機能つき） */}
                         <td className="p-1 text-center align-middle text-slate-700 font-mono text-[11px] sm:text-xs">
-                          {item.dueDate ? item.dueDate.replace(/-/g, "/") : "-"}
+                          {editingId === item.id ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <input
+                                type="text"
+                                value={editingDueDate}
+                                onChange={(e) => setEditingDueDate(e.target.value)}
+                                className="w-20 px-1 py-0.5 text-[11px] border border-emerald-500 rounded bg-white text-slate-800 focus:outline-none"
+                                placeholder="YYYY/MM/DD"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => saveDueDate(item.id)}
+                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition"
+                                title="保存"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 transition"
+                                title="キャンセル"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1 group">
+                              <span>{item.dueDate || "-"}</span>
+                              <button
+                                onClick={() => startEditingDueDate(item.id, item.dueDate || "")}
+                                className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition"
+                                title="期限を編集"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
 
