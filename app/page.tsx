@@ -26,8 +26,7 @@ import {
 } from "lucide-react";
 
 // 店舗カテゴリーの定義
-const STORES = ["すべて", "サミット", "まいばすけっと", "100均", "AVE","その他"] as const;
-type StoreType = (typeof STORES)[number];
+const STORES = ["すべて", "サミット", "まいばすけっと", "100均", "AVE", "その他"] as const;
 
 interface Comment {
   id: string;
@@ -38,14 +37,15 @@ interface Comment {
 interface Item {
   id: string;
   text: string;
-  store?: string; // 店舗分類（追加）
+  store?: string;
 }
 
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
-  const [selectedStore, setSelectedStore] = useState<string>("未設定"); // 追加時のデフォルト店舗
-  const [filterStore, setFilterStore] = useState<string>("すべて"); // 絞り込み用の選択店舗
+  // 🔥 追加時の選択店舗（初期値は未選択とするため null に設定）
+  const [selectedStore, setSelectedStore] = useState<string | null>(null);
+  const [filterStore, setFilterStore] = useState<string>("すべて");
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
   // Firestoreから買い物リストをリアルタイム取得
@@ -55,7 +55,7 @@ export default function Home() {
       const list: Item[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         text: doc.data().text,
-        store: doc.data().store || "その他", // 未設定の場合は「その他」扱い
+        store: doc.data().store || "その他",
       }));
       setItems(list);
     });
@@ -70,10 +70,13 @@ export default function Home() {
 
     await addDoc(collection(db, "items"), {
       text: text.trim(),
-      store: selectedStore, // 店舗情報を一緒に保存
+      store: selectedStore || "その他", // 店舗が選ばれていない場合は「その他」で保存
       createdAt: serverTimestamp(),
     });
+
+    // 🔥 入力フィールドと店舗選択をリセット（解除）
     setText("");
+    setSelectedStore(null);
   };
 
   // アイテムの削除
@@ -125,10 +128,11 @@ export default function Home() {
               <button
                 key={storeName}
                 type="button"
-                onClick={() => setSelectedStore(storeName)}
+                // 🔥 同じボタンをもう一度押すと選択解除できるトグル機能も追加
+                onClick={() => setSelectedStore(selectedStore === storeName ? null : storeName)}
                 className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition ${
                   selectedStore === storeName
-                    ? "bg-emerald-600 text-white font-medium"
+                    ? "bg-emerald-600 text-white font-medium shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
