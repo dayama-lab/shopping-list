@@ -38,6 +38,7 @@ const STORES = [
   "AVE",
   "その他",
 ] as const;
+
 // 優先度の定義
 const PRIORITIES = ["高", "中", "低"] as const;
 
@@ -91,6 +92,16 @@ export default function Home() {
 
     return () => unsubscribe();
   }, []);
+
+  // 日付ショートカット計算用関数
+  const setShortcutDate = (daysToAdd: number) => {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + daysToAdd);
+    const yyyy = targetDate.getFullYear();
+    const mm = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(targetDate.getDate()).padStart(2, "0");
+    setDueDate(`${yyyy}-${mm}-${dd}`);
+  };
 
   // アイテムの追加
   const addItem = async (e: React.FormEvent) => {
@@ -182,52 +193,90 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 優先度 ＆ 期限 */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5" /> 優先度:
-              </span>
-              <div className="flex gap-1">
-                {PRIORITIES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setSelectedPriority(p)}
-                    className={`px-2 py-0.5 rounded font-medium border transition ${
-                      selectedPriority === p
-                        ? p === "高"
-                          ? "bg-red-500 text-white border-red-500"
-                          : p === "中"
-                          ? "bg-amber-500 text-white border-amber-500"
-                          : "bg-blue-500 text-white border-blue-500"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
+          {/* 優先度 */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+            <span className="text-slate-500 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> 優先度:
+            </span>
+            <div className="flex gap-1">
+              {PRIORITIES.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setSelectedPriority(p)}
+                  className={`px-2.5 py-0.5 rounded font-medium border transition ${
+                    selectedPriority === p
+                      ? p === "高"
+                        ? "bg-red-500 text-white border-red-500"
+                        : p === "中"
+                        ? "bg-amber-500 text-white border-amber-500"
+                        : "bg-blue-500 text-white border-blue-500"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* 期限（日付選択＋クリア機能） */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500 font-medium flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" /> 期限:
-              </span>
-              <div className="flex items-center gap-1">
+          {/* 期限（ショートカットボタン ＋ カレンダー入力） */}
+          <div className="space-y-1.5 pt-1 text-xs">
+            <div className="flex items-center gap-1 text-slate-500 font-medium">
+              <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* ワンタップショートカットボタン */}
+              <button
+                type="button"
+                onClick={() => setShortcutDate(0)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                今日
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortcutDate(1)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                明日
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortcutDate(3)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                3日後
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortcutDate(7)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                1週後
+              </button>
+              <button
+                type="button"
+                onClick={() => setDueDate("")}
+                className="px-2 py-1 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-500 border border-slate-200 rounded font-medium transition"
+              >
+                なし
+              </button>
+
+              {/* 直接入力/カレンダー選択枠 */}
+              <div className="flex items-center gap-1 ml-auto">
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="px-2 py-1 border border-slate-300 rounded-md bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
                 {dueDate && (
                   <button
                     type="button"
                     onClick={() => setDueDate("")}
-                    className="p-1 text-xs text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded"
-                    title="期限を「なし（-）」に戻す"
+                    className="p-1 text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded"
+                    title="クリア"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -292,14 +341,12 @@ export default function Home() {
                   filteredItems.map((item) => (
                     <React.Fragment key={item.id}>
                       <tr className="hover:bg-slate-50/80 transition">
-                        {/* 1. 必要なもの（品名と、その下にアイコン配置） */}
+                        {/* 1. 必要なもの */}
                         <td className="p-2 border-r border-slate-800 align-middle">
                           <div className="flex flex-col gap-1">
-                            {/* 上段：品名 */}
                             <span className="font-bold text-slate-800 text-sm break-all leading-tight">
                               {item.text}
                             </span>
-                            {/* 下段：コメント・削除ボタン */}
                             <div className="flex items-center gap-2 pt-0.5">
                               <button
                                 onClick={() => toggleComment(item.id)}
@@ -328,7 +375,7 @@ export default function Home() {
                           </div>
                         </td>
 
-                        {/* 2. お店（先頭2文字だけ表示） */}
+                        {/* 2. お店（先頭2文字表示） */}
                         <td className="p-1 border-r border-slate-800 align-middle text-center">
                           <span className="inline-block px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
                             {item.store ? item.store.slice(0, 2) : "その"}
@@ -356,7 +403,7 @@ export default function Home() {
                         </td>
                       </tr>
 
-                      {/* コメントアコーディオンエリア */}
+                      {/* コメントエリア */}
                       {openCommentId === item.id && (
                         <tr>
                           <td colSpan={4} className="bg-slate-50 p-0 border-b border-slate-800">
