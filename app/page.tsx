@@ -226,7 +226,7 @@ function CommentSection({ itemId }: { itemId: string }) {
           type="text"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
-          placeholder="コメントを入力（例: 父が買います）"
+          placeholder="コメントを入力（例: マミーノが買います）"
           className="flex-1 px-3 py-2 border border-slate-200 rounded-lg bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         />
         <button
