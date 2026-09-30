@@ -55,7 +55,7 @@ export default function Home() {
   };
 
   return (
-    <main className="max-w-md mx-auto min-h-screen bg-slate-50 p-4 pb-20">
+    <main className="w-full mx-auto min-h-screen bg-slate-50 p-4 pb-20">
       <header className="flex items-center gap-2 mb-6 pt-4">
         <ShoppingBag className="w-6 h-6 text-emerald-600" />
         <h1 className="text-xl font-bold text-slate-800">買い物リスト</h1>
