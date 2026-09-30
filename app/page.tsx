@@ -177,7 +177,7 @@ export default function Home() {
             <ShoppingBag className="w-6 h-6 text-emerald-600" />
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
-            買い物リスト
+            買い物リスト 山田家専用
           </h1>
         </header>
 
