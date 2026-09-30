@@ -29,7 +29,6 @@ interface Item {
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
-  // どのアイテムのコメントエリアを開いているか管理するID
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
   // Firestoreから買い物リストをリアルタイム取得
@@ -129,7 +128,7 @@ export default function Home() {
                       )}
                     </button>
 
-                    {/* 削除ボタン */}
+                    {/* アイテム削除ボタン */}
                     <button
                       onClick={() => deleteItem(item.id)}
                       className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
@@ -188,19 +187,34 @@ function CommentSection({ itemId }: { itemId: string }) {
     setCommentText("");
   };
 
+  // 🔥 追加：コメントの削除機能
+  const deleteComment = async (commentId: string) => {
+    await deleteDoc(doc(db, "items", itemId, "comments", commentId));
+  };
+
   return (
     <div className="bg-slate-50 p-4 border-t border-slate-100 space-y-3">
       {/* コメント一覧 */}
       <div className="space-y-2 max-h-40 overflow-y-auto">
         {comments.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">コメントはまだありません。「～が買います」などを入力できます。</p>
+          <p className="text-xs text-slate-400 italic">
+            コメントはまだありません。「父が買います」などを入力できます。
+          </p>
         ) : (
           comments.map((comment) => (
             <div
               key={comment.id}
-              className="bg-white p-2.5 rounded-lg border border-slate-100 text-xs text-slate-700 shadow-2xs"
+              className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-100 text-xs text-slate-700 shadow-2xs group"
             >
-              <p className="break-all">{comment.text}</p>
+              <p className="break-all pr-2">{comment.text}</p>
+              {/* コメント削除ボタン */}
+              <button
+                onClick={() => deleteComment(comment.id)}
+                className="text-slate-300 hover:text-red-500 p-1 rounded transition flex-shrink-0"
+                title="コメントを削除"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
             </div>
           ))
         )}
