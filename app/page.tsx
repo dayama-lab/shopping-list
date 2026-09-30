@@ -198,7 +198,7 @@ function CommentSection({ itemId }: { itemId: string }) {
       <div className="space-y-2 max-h-40 overflow-y-auto">
         {comments.length === 0 ? (
           <p className="text-xs text-slate-400 italic">
-            コメントはまだありません。「父が買います」などを入力できます。
+            コメントはまだありません。「マミーノが買います」などを入力できます。
           </p>
         ) : (
           comments.map((comment) => (
