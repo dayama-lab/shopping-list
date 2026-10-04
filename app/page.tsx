@@ -45,6 +45,13 @@ const STORES = [
 // 優先度の定義
 const PRIORITIES = ["高", "中", "低"] as const;
 
+// 優先度の重み付け（並び替え用：高が一番上）
+const PRIORITY_WEIGHT: Record<string, number> = {
+  高: 3,
+  中: 2,
+  低: 1,
+};
+
 interface Comment {
   id: string;
   text: string;
@@ -74,7 +81,6 @@ export default function Home() {
 
   // 日付の入力文字列を 自動で YYYY/MM/DD フォーマットに整形する関数
   const formatDateInput = (value: string) => {
-    // 数字以外の文字をすべて除去
     const nums = value.replace(/\D/g, "");
     if (nums.length <= 4) return nums;
     if (nums.length <= 6) return `${nums.slice(0, 4)}/${nums.slice(4)}`;
@@ -93,14 +99,22 @@ export default function Home() {
         dueDate: doc.data().dueDate || "",
       }));
 
-      // 期限（dueDate）が近い順（昇順）に並び替え（未設定は一番最後）
+      // 🔥 期限（昇順） ＞ 優先度（高→中→低） の順でソート
       list.sort((a, b) => {
         const dateA = a.dueDate || "";
         const dateB = b.dueDate || "";
-        if (!dateA && !dateB) return 0;
-        if (!dateA) return 1;
-        if (!dateB) return -1;
-        return dateA.localeCompare(dateB);
+
+        // 1. 期限による比較
+        if (dateA !== dateB) {
+          if (!dateA) return 1;  // 期限なしは一番後ろ
+          if (!dateB) return -1;
+          return dateA.localeCompare(dateB);
+        }
+
+        // 2. 期限が同じ場合は優先度順（高 ＞ 中 ＞ 低）で比較
+        const weightA = PRIORITY_WEIGHT[a.priority || "中"] || 2;
+        const weightB = PRIORITY_WEIGHT[b.priority || "中"] || 2;
+        return weightB - weightA;
       });
 
       setItems(list);
@@ -177,7 +191,7 @@ export default function Home() {
             <ShoppingBag className="w-6 h-6 text-emerald-600" />
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
-            買い物リスト 山田家専用
+            買い物リスト
           </h1>
         </header>
 
@@ -223,7 +237,7 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 優先度 */}
+          {/* 優先度選択 */}
           <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-slate-500 font-medium flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" /> 優先度:
@@ -250,7 +264,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 期限（ショートカットボタン ＋ 自動フォーマット手入力） */}
+          {/* 期限 */}
           <div className="space-y-1.5 pt-1 text-xs">
             <div className="flex items-center gap-1 text-slate-500 font-medium">
               <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
@@ -292,7 +306,6 @@ export default function Home() {
                 なし
               </button>
 
-              {/* 数字キーボード優先 ＋ スラッシュ自動補完入力欄 */}
               <div className="flex items-center gap-1 ml-auto">
                 <input
                   type="text"
@@ -414,7 +427,7 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 3. 優先度 */}
+                        {/* 3. 優先度表示 */}
                         <td className="p-1 border-r border-slate-800 text-center align-middle font-medium">
                           <span
                             className={
@@ -429,7 +442,7 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 4. 期限（インライン編集＋自動補完） */}
+                        {/* 4. 期限 */}
                         <td className="p-1 text-center align-middle text-slate-700 font-mono text-[11px] sm:text-xs">
                           {editingId === item.id ? (
                             <div className="flex items-center justify-center gap-1">
