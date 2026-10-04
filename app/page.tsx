@@ -45,7 +45,7 @@ const STORES = [
 // 優先度の定義
 const PRIORITIES = ["高", "中", "低"] as const;
 
-// 優先度の重み付け（並び替え用：高が一番上）
+// 優先度の重み付け（並び替え用）
 const PRIORITY_WEIGHT: Record<string, number> = {
   高: 3,
   中: 2,
@@ -99,19 +99,17 @@ export default function Home() {
         dueDate: doc.data().dueDate || "",
       }));
 
-      // 🔥 期限（昇順） ＞ 優先度（高→中→低） の順でソート
+      // 期限（昇順） ＞ 優先度（高→中→低） の順でソート
       list.sort((a, b) => {
         const dateA = a.dueDate || "";
         const dateB = b.dueDate || "";
 
-        // 1. 期限による比較
         if (dateA !== dateB) {
-          if (!dateA) return 1;  // 期限なしは一番後ろ
+          if (!dateA) return 1;
           if (!dateB) return -1;
           return dateA.localeCompare(dateB);
         }
 
-        // 2. 期限が同じ場合は優先度順（高 ＞ 中 ＞ 低）で比較
         const weightA = PRIORITY_WEIGHT[a.priority || "中"] || 2;
         const weightB = PRIORITY_WEIGHT[b.priority || "中"] || 2;
         return weightB - weightA;
@@ -155,6 +153,14 @@ export default function Home() {
   // アイテムの削除
   const deleteItem = async (id: string) => {
     await deleteDoc(doc(db, "items", id));
+  };
+
+  // 🔥 後から優先度を変更する関数
+  const updatePriority = async (id: string, newPriority: string) => {
+    const itemRef = doc(db, "items", id);
+    await updateDoc(itemRef, {
+      priority: newPriority,
+    });
   };
 
   // 期限（日付）の修正・保存
@@ -361,16 +367,16 @@ export default function Home() {
             <table className="w-full text-left border-collapse table-fixed">
               <thead>
                 <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs font-bold">
-                  <th className="py-2.5 px-2 border-r border-slate-800 w-[38%] text-center">
+                  <th className="py-2.5 px-2 border-r border-slate-800 w-[35%] text-center">
                     必要なもの
                   </th>
                   <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[17%]">
                     お店
                   </th>
-                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[15%]">
+                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[23%]">
                     優先度
                   </th>
-                  <th className="py-2.5 px-1 text-center w-[30%]">期限</th>
+                  <th className="py-2.5 px-1 text-center w-[25%]">期限</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-xs">
@@ -427,19 +433,31 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 3. 優先度表示 */}
-                        <td className="p-1 border-r border-slate-800 text-center align-middle font-medium">
-                          <span
-                            className={
-                              item.priority === "高"
-                                ? "text-red-600 font-bold"
-                                : item.priority === "中"
-                                ? "text-amber-600"
-                                : "text-slate-500"
-                            }
-                          >
-                            {item.priority || "中"}
-                          </span>
+                        {/* 3. 🔥 後からワンタップで直接変更できる優先度ボタン */}
+                        <td className="p-1 border-r border-slate-800 text-center align-middle">
+                          <div className="flex justify-center gap-0.5">
+                            {PRIORITIES.map((p) => {
+                              const isSelected = (item.priority || "中") === p;
+                              return (
+                                <button
+                                  key={p}
+                                  onClick={() => updatePriority(item.id, p)}
+                                  className={`px-1.5 py-0.5 rounded text-[11px] font-bold border transition ${
+                                    isSelected
+                                      ? p === "高"
+                                        ? "bg-red-500 text-white border-red-500 shadow-2xs"
+                                        : p === "中"
+                                        ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
+                                        : "bg-blue-500 text-white border-blue-500 shadow-2xs"
+                                      : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200"
+                                  }`}
+                                  title={`優先度を「${p}」に変更`}
+                                >
+                                  {p}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </td>
 
                         {/* 4. 期限 */}
