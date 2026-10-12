@@ -18,6 +18,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   User,
 } from "firebase/auth";
@@ -39,6 +40,8 @@ import {
   Settings,
   LogOut,
   Lock,
+  Mail,
+  ArrowLeft,
 } from "lucide-react";
 
 // 優先度の定義
@@ -76,29 +79,27 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isResetPassword, setIsResetPassword] = useState(false); // 🔑 パスワードリセット画面フラグ
   const [authError, setAuthError] = useState("");
+  const [resetMessage, setResetMessage] = useState(""); // 🔑 リセットメール送信完了メッセージ
 
   const [items, setItems] = useState<Item[]>([]);
   const [stores, setStores] = useState<string[]>([]);
   const [storeDocs, setStoreDocs] = useState<StoreItem[]>([]);
   const [text, setText] = useState("");
 
-  // 初期値は未選択（null）
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string>("中");
   const [dueDate, setDueDate] = useState<string>("");
   const [filterStore, setFilterStore] = useState<string>("すべて");
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
-  // 設定ダイアログの開閉と入力状態
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
 
-  // 期限の編集状態管理
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDueDate, setEditingDueDate] = useState<string>("");
 
-  // 日付の入力文字列を 自動で YYYY/MM/DD フォーマットに整形する関数
   const formatDateInput = (value: string) => {
     const nums = value.replace(/\D/g, "");
     if (nums.length <= 4) return nums;
@@ -119,6 +120,7 @@ export default function Home() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
+    setResetMessage("");
     try {
       if (isSignUp) {
         await createUserWithEmailAndPassword(auth, email, password);
@@ -147,12 +149,37 @@ export default function Home() {
     }
   };
 
+  // 🔑 パスワード再設定メール送信処理
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setResetMessage("");
+    if (!email.trim()) {
+      setAuthError("メールアドレスを入力してください。");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetMessage(
+        "パスワード再設定用のメールを送信しました。メール内のリンクから再設定を行ってください。"
+      );
+    } catch (err: any) {
+      if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+        setAuthError("このメールアドレスは登録されていません。");
+      } else if (err.code === "auth/invalid-email") {
+        setAuthError("無効なメールアドレスの形式です。");
+      } else {
+        setAuthError("送信エラーが発生しました: " + err.message);
+      }
+    }
+  };
+
   // ログアウト処理
   const handleLogout = async () => {
     await signOut(auth);
   };
 
-  // 2. Firestoreから店舗一覧をリアルタイム取得（デフォルト追加なし）
+  // 2. 店舗一覧取得
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
@@ -168,7 +195,7 @@ export default function Home() {
     return () => unsubscribe();
   }, [user]);
 
-  // 3. Firestoreから買い物リストをリアルタイム取得
+  // 3. 買い物リスト取得
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
@@ -202,7 +229,6 @@ export default function Home() {
     return () => unsubscribe();
   }, [user]);
 
-  // 店舗の追加（設定ダイアログ内）
   const handleAddStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStoreName.trim()) return;
@@ -218,12 +244,10 @@ export default function Home() {
     setNewStoreName("");
   };
 
-  // 店舗の削除（設定ダイアログ内）
   const handleDeleteStore = async (storeId: string) => {
     await deleteDoc(doc(db, "stores", storeId));
   };
 
-  // 日付ショートカット計算用関数
   const setShortcutDate = (daysToAdd: number) => {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + daysToAdd);
@@ -233,7 +257,6 @@ export default function Home() {
     setDueDate(`${yyyy}/${mm}/${dd}`);
   };
 
-  // アイテムの追加
   const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -252,12 +275,10 @@ export default function Home() {
     setDueDate("");
   };
 
-  // アイテムの削除
   const deleteItem = async (id: string) => {
     await deleteDoc(doc(db, "items", id));
   };
 
-  // 優先度の直接変更
   const updatePriority = async (id: string, newPriority: string) => {
     const itemRef = doc(db, "items", id);
     await updateDoc(itemRef, {
@@ -265,7 +286,6 @@ export default function Home() {
     });
   };
 
-  // 期限（日付）の修正・保存
   const startEditingDueDate = (id: string, currentDueDate: string) => {
     setEditingId(id);
     setEditingDueDate(currentDueDate || "");
@@ -279,18 +299,15 @@ export default function Home() {
     setEditingId(null);
   };
 
-  // コメント開閉の切り替え
   const toggleComment = (id: string) => {
     setOpenCommentId(openCommentId === id ? null : id);
   };
 
-  // 絞り込みフィルターの適用
   const filteredItems = items.filter((item) => {
     if (filterStore === "すべて") return true;
     return item.store === filterStore;
   });
 
-  // ロード中表示
   if (authLoading) {
     return (
       <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center">
@@ -299,80 +316,166 @@ export default function Home() {
     );
   }
 
-  // 🔒 未ログイン時：ログイン画面
+  // 🔒 未ログイン時：ログイン画面 / パスワード再設定画面
   if (!user) {
     return (
       <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-md w-full max-w-md space-y-6">
-          <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
-              <Lock className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              {isSignUp ? "アカウント新規作成" : "ログイン"}
-            </h1>
-            <p className="text-xs text-slate-500">
-              買い物リストを利用するにはログインが必要です
-            </p>
-          </div>
+          
+          {/* 🔑 パスワード再設定モードの場合 */}
+          {isResetPassword ? (
+            <>
+              <div className="text-center space-y-2">
+                <div className="inline-flex p-3 bg-amber-100 text-amber-600 rounded-2xl mb-1">
+                  <Mail className="w-7 h-7" />
+                </div>
+                <h1 className="text-2xl font-bold text-slate-800">
+                  パスワードの再設定
+                </h1>
+                <p className="text-xs text-slate-500">
+                  ご登録のメールアドレスを入力してください。<br />
+                  再設定用のリンクをお送りします。
+                </p>
+              </div>
 
-          {authError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
-              {authError}
-            </div>
+              {authError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+                  {authError}
+                </div>
+              )}
+
+              {resetMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-medium leading-relaxed">
+                  {resetMessage}
+                </div>
+              )}
+
+              <form onSubmit={handleResetPassword} className="space-y-4 text-sm">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    メールアドレス
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@email.com"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
+                >
+                  再設定メールを送信
+                </button>
+              </form>
+
+              <div className="pt-2 border-t border-slate-100 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetPassword(false);
+                    setAuthError("");
+                    setResetMessage("");
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> ログイン画面に戻る
+                </button>
+              </div>
+            </>
+          ) : (
+            /* 🔓 通常の ログイン / 新規登録 モードの場合 */
+            <>
+              <div className="text-center space-y-2">
+                <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
+                  <Lock className="w-7 h-7" />
+                </div>
+                <h1 className="text-2xl font-bold text-slate-800">
+                  {isSignUp ? "アカウント新規作成" : "ログイン"}
+                </h1>
+                <p className="text-xs text-slate-500">
+                  買い物リストを利用するにはログインが必要です
+                </p>
+              </div>
+
+              {authError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+                  {authError}
+                </div>
+              )}
+
+              <form onSubmit={handleAuth} className="space-y-4 text-sm">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    メールアドレス
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@email.com"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-semibold text-slate-600">
+                      パスワード
+                    </label>
+                    {!isSignUp && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsResetPassword(true);
+                          setAuthError("");
+                        }}
+                        className="text-[11px] text-emerald-600 hover:underline font-medium"
+                      >
+                        パスワードをお忘れの方
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="6文字以上"
+                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
+                >
+                  {isSignUp ? "新規登録する" : "ログイン"}
+                </button>
+              </form>
+
+              <div className="pt-2 border-t border-slate-100 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setAuthError("");
+                  }}
+                  className="text-xs font-medium text-emerald-600 hover:underline"
+                >
+                  {isSignUp
+                    ? "すでにアカウントをお持ちの方（ログイン）"
+                    : "アカウントをお持ちでない方（新規登録）"}
+                </button>
+              </div>
+            </>
           )}
 
-          <form onSubmit={handleAuth} className="space-y-4 text-sm">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                メールアドレス
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@email.com"
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                パスワード
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="6文字以上"
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
-            >
-              {isSignUp ? "新規登録する" : "ログイン"}
-            </button>
-          </form>
-
-          <div className="pt-2 border-t border-slate-100 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setAuthError("");
-              }}
-              className="text-xs font-medium text-emerald-600 hover:underline"
-            >
-              {isSignUp
-                ? "すでにアカウントをお持ちの方（ログイン）"
-                : "アカウントをお持ちでない方（新規登録）"}
-            </button>
-          </div>
         </div>
       </main>
     );
@@ -382,7 +485,6 @@ export default function Home() {
   return (
     <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
       <div className="max-w-2xl mx-auto">
-        {/* ヘッダー */}
         <header className="flex items-center justify-between mb-4 pt-2">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-100 rounded-xl">
@@ -413,7 +515,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* 登録フォーム */}
         <form
           onSubmit={addItem}
           className="bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-xs mb-4 space-y-3"
@@ -434,7 +535,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 店名タグ（店舗が0件の場合のみ「※お店を設定してください」を表示） */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
 
@@ -462,7 +562,6 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 優先度選択 */}
           <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-slate-500 font-medium flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5" /> 優先度:
@@ -489,7 +588,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 期限 */}
           <div className="space-y-1.5 pt-1 text-xs">
             <div className="flex items-center gap-1 text-slate-500 font-medium">
               <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
@@ -556,7 +654,6 @@ export default function Home() {
           </div>
         </form>
 
-        {/* 絞り込みタブ */}
         <div className="mb-3">
           <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5 font-medium">
             <Filter className="w-3.5 h-3.5" />
@@ -580,7 +677,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* テーブル表示 */}
         <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse table-fixed">
@@ -611,7 +707,6 @@ export default function Home() {
                   filteredItems.map((item) => (
                     <React.Fragment key={item.id}>
                       <tr className="hover:bg-slate-50/80 transition">
-                        {/* 1. 必要なもの */}
                         <td className="p-2 border-r border-slate-800 align-middle">
                           <div className="flex flex-col gap-1">
                             <span className="font-bold text-slate-800 text-sm break-all leading-tight">
@@ -645,14 +740,12 @@ export default function Home() {
                           </div>
                         </td>
 
-                        {/* 2. お店 */}
                         <td className="p-1 border-r border-slate-800 align-middle text-center">
                           <span className="inline-block px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
                             {item.store ? item.store.slice(0, 2) : "その"}
                           </span>
                         </td>
 
-                        {/* 3. 優先度 */}
                         <td className="p-1 border-r border-slate-800 text-center align-middle">
                           <div className="flex justify-center gap-0.5">
                             {PRIORITIES.map((p) => {
@@ -679,7 +772,6 @@ export default function Home() {
                           </div>
                         </td>
 
-                        {/* 4. 期限 */}
                         <td className="p-1 text-center align-middle text-slate-700 font-mono text-[11px] sm:text-xs">
                           {editingId === item.id ? (
                             <div className="flex items-center justify-center gap-1">
@@ -727,7 +819,6 @@ export default function Home() {
                         </td>
                       </tr>
 
-                      {/* コメントエリア */}
                       {openCommentId === item.id && (
                         <tr>
                           <td
@@ -746,7 +837,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 店舗設定ダイアログ (モーダル) */}
         {isSettingsOpen && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl space-y-4 border border-slate-200">
@@ -763,7 +853,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* 店舗追加フォーム */}
               <form onSubmit={handleAddStore} className="flex gap-2">
                 <input
                   type="text"
@@ -781,7 +870,6 @@ export default function Home() {
                 </button>
               </form>
 
-              {/* 登録済み店舗一覧 */}
               <div className="space-y-2 max-h-60 overflow-y-auto pt-2">
                 <span className="text-xs font-semibold text-slate-500">
                   登録中のお店一覧
@@ -825,7 +913,6 @@ export default function Home() {
   );
 }
 
-// コメント欄コンポーネント
 function CommentSection({ itemId }: { itemId: string }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
