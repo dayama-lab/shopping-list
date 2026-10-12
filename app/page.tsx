@@ -32,7 +32,7 @@ import {
   Settings,
 } from "lucide-react";
 
-// Firestore初期起動時にデータがない場合に登録するデフォルト店舗一覧
+// デフォルトの店舗リスト
 const DEFAULT_STORES = [
   "サミット",
   "まいばすけっと",
@@ -84,7 +84,7 @@ export default function Home() {
   const [filterStore, setFilterStore] = useState<string>("すべて");
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
-  // 設定メニュー（ダイアログ）の開閉と入力状態
+  // 設定ダイアログの開閉と入力状態
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
 
@@ -100,7 +100,7 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // Firestoreから店舗一覧をリアルタイム取得（初回未登録時はデフォルト店舗を登録）
+  // Firestoreから店舗一覧をリアルタイム取得（初期データなしの場合はデフォルト登録）
   useEffect(() => {
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -202,7 +202,7 @@ export default function Home() {
       createdAt: serverTimestamp(),
     });
 
-    // 登録完了後に初期化（お店の選択も未選択 null に戻る）
+    // 登録完了後に初期化（お店選択も未選択 null に戻る）
     setText("");
     setSelectedStore(null);
     setSelectedPriority("中");
@@ -254,134 +254,4 @@ export default function Home() {
         <header className="flex items-center justify-between mb-4 pt-2">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-100 rounded-xl">
-              <ShoppingBag className="w-6 h-6 text-emerald-600" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
-              買い物リスト
-            </h1>
-          </div>
-          {/* お店設定ボタン */}
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
-            title="店舗設定"
-          >
-            <Settings className="w-4 h-4 text-slate-500" />
-            <span>お店設定</span>
-          </button>
-        </header>
-
-        {/* 登録フォーム */}
-        <form
-          onSubmit={addItem}
-          className="bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-xs mb-4 space-y-3"
-        >
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="買うものを入力..."
-              className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-            />
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-xs active:scale-95 transition flex items-center justify-center min-w-[50px]"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* 店名タグ（未選択時は案内を表示） */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
-            
-            {!selectedStore && (
-              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-medium animate-pulse flex-shrink-0">
-                ※お店を設定してください
-              </span>
-            )}
-
-            {stores.map((storeName) => (
-              <button
-                key={storeName}
-                type="button"
-                onClick={() =>
-                  setSelectedStore(selectedStore === storeName ? null : storeName)
-                }
-                className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
-                  selectedStore === storeName
-                    ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
-                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                {storeName}
-              </button>
-            ))}
-          </div>
-
-          {/* 優先度選択 */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
-            <span className="text-slate-500 font-medium flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" /> 優先度:
-            </span>
-            <div className="flex gap-1">
-              {PRIORITIES.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setSelectedPriority(p)}
-                  className={`px-2.5 py-0.5 rounded font-medium border transition ${
-                    selectedPriority === p
-                      ? p === "高"
-                        ? "bg-red-500 text-white border-red-500"
-                        : p === "中"
-                        ? "bg-amber-500 text-white border-amber-500"
-                        : "bg-blue-500 text-white border-blue-500"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 期限 */}
-          <div className="space-y-1.5 pt-1 text-xs">
-            <div className="flex items-center gap-1 text-slate-500 font-medium">
-              <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setShortcutDate(0)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
-              >
-                今日
-              </button>
-              <button
-                type="button"
-                onClick={() => setShortcutDate(1)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
-              >
-                明日
-              </button>
-              <button
-                type="button"
-                onClick={() => setShortcutDate(3)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
-              >
-                3日後
-              </button>
-              <button
-                type="button"
-                onClick={() => setShortcutDate(7)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
-              >
-                1週後
-              </button>
-              <button
-                type="button"
-                onClick={() => setDueDate("")}
-                className="px-2 py-1 bg-slate-100 hover:bg-red-50 hover:text-red
+              <ShoppingBag className
