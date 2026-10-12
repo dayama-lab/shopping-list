@@ -13,6 +13,7 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  setDoc,
 } from "firebase/firestore";
 import {
   Trash2,
@@ -29,18 +30,18 @@ import {
   X,
   Pencil,
   Check,
+  Settings,
 } from "lucide-react";
 
-// 店舗カテゴリーの定義
-const STORES = [
-  "すべて",
+// デフォルトの店舗リスト
+const DEFAULT_STORES = [
   "サミット",
   "まいばすけっと",
   "ドラッグストア",
   "100均",
   "AVE",
   "その他",
-] as const;
+];
 
 // 優先度の定義
 const PRIORITIES = ["高", "中", "低"] as const;
@@ -66,14 +67,26 @@ interface Item {
   dueDate?: string;
 }
 
+interface StoreItem {
+  id: string;
+  name: string;
+  order?: number;
+}
+
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
+  const [stores, setStores] = useState<string[]>([]);
+  const [storeDocs, setStoreDocs] = useState<StoreItem[]>([]);
   const [text, setText] = useState("");
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string>("中");
   const [dueDate, setDueDate] = useState<string>("");
   const [filterStore, setFilterStore] = useState<string>("すべて");
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
+
+  // 設定メニュー（モーダル）の開閉と入力状態
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [newStoreName, setNewStoreName] = useState("");
 
   // 期限の編集状態管理
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -86,6 +99,31 @@ export default function Home() {
     if (nums.length <= 6) return `${nums.slice(0, 4)}/${nums.slice(4)}`;
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
+
+  // Firestoreから店舗一覧をリアルタイム取得（未登録なら初期登録）
+  useEffect(() => {
+    const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      if (snapshot.empty) {
+        // 初期データが存在しない場合はデフォルト店舗を登録
+        for (let i = 0; i < DEFAULT_STORES.length; i++) {
+          await addDoc(collection(db, "stores"), {
+            name: DEFAULT_STORES[i],
+            createdAt: serverTimestamp(),
+          });
+        }
+      } else {
+        const list: StoreItem[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name,
+        }));
+        setStoreDocs(list);
+        setStores(list.map((s) => s.name));
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Firestoreから買い物リストをリアルタイム取得
   useEffect(() => {
@@ -121,6 +159,27 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
+  // 店舗の追加
+  const handleAddStore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStoreName.trim()) return;
+    if (stores.includes(newStoreName.trim())) {
+      alert("そのお店は既に登録されています");
+      return;
+    }
+
+    await addDoc(collection(db, "stores"), {
+      name: newStoreName.trim(),
+      createdAt: serverTimestamp(),
+    });
+    setNewStoreName("");
+  };
+
+  // 店舗の削除
+  const handleDeleteStore = async (storeId: string) => {
+    await deleteDoc(doc(db, "stores", storeId));
+  };
+
   // 日付ショートカット計算用関数
   const setShortcutDate = (daysToAdd: number) => {
     const targetDate = new Date();
@@ -155,7 +214,7 @@ export default function Home() {
     await deleteDoc(doc(db, "items", id));
   };
 
-  // 🔥 後から優先度を変更する関数
+  // 後から優先度を変更する関数
   const updatePriority = async (id: string, newPriority: string) => {
     const itemRef = doc(db, "items", id);
     await updateDoc(itemRef, {
@@ -191,14 +250,25 @@ export default function Home() {
   return (
     <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
       <div className="max-w-2xl mx-auto">
-        {/* ヘッダー */}
-        <header className="flex items-center gap-2 mb-4 pt-2">
-          <div className="p-2 bg-emerald-100 rounded-xl">
-            <ShoppingBag className="w-6 h-6 text-emerald-600" />
+        {/* ヘッダー（設定ボタン付き） */}
+        <header className="flex items-center justify-between mb-4 pt-2">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-100 rounded-xl">
+              <ShoppingBag className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
+              買い物リスト
+            </h1>
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
-            買い物リスト
-          </h1>
+          {/* 設定ボタン */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+            title="店舗設定"
+          >
+            <Settings className="w-4 h-4 text-slate-500" />
+            <span>お店設定</span>
+          </button>
         </header>
 
         {/* 登録フォーム */}
@@ -222,10 +292,10 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 店名タグ */}
+          {/* 店名タグ（動的取得した店舗リスト） */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
-            {STORES.filter((s) => s !== "すべて").map((storeName) => (
+            {stores.map((storeName) => (
               <button
                 key={storeName}
                 type="button"
@@ -337,14 +407,14 @@ export default function Home() {
           </div>
         </form>
 
-        {/* 絞り込みタブ */}
+        {/* 絞り込みタブ（すべて ＋ 店舗リスト） */}
         <div className="mb-3">
           <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5 font-medium">
             <Filter className="w-3.5 h-3.5" />
             <span>表示するお店で絞り込み:</span>
           </div>
           <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
-            {STORES.map((storeName) => (
+            {["すべて", ...stores].map((storeName) => (
               <button
                 key={storeName}
                 type="button"
@@ -433,7 +503,7 @@ export default function Home() {
                           </span>
                         </td>
 
-                        {/* 3. 🔥 後からワンタップで直接変更できる優先度ボタン */}
+                        {/* 3. 優先度 */}
                         <td className="p-1 border-r border-slate-800 text-center align-middle">
                           <div className="flex justify-center gap-0.5">
                             {PRIORITIES.map((p) => {
@@ -468,7 +538,9 @@ export default function Home() {
                                 type="text"
                                 inputMode="numeric"
                                 value={editingDueDate}
-                                onChange={(e) => setEditingDueDate(formatDateInput(e.target.value))}
+                                onChange={(e) =>
+                                  setEditingDueDate(formatDateInput(e.target.value))
+                                }
                                 maxLength={10}
                                 className="w-20 px-1 py-0.5 text-[11px] border border-emerald-500 rounded bg-white text-slate-800 focus:outline-none"
                                 placeholder="20261001"
@@ -493,7 +565,9 @@ export default function Home() {
                             <div className="flex items-center justify-center gap-1 group">
                               <span>{item.dueDate || "-"}</span>
                               <button
-                                onClick={() => startEditingDueDate(item.id, item.dueDate || "")}
+                                onClick={() =>
+                                  startEditingDueDate(item.id, item.dueDate || "")
+                                }
                                 className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition"
                                 title="期限を編集"
                               >
@@ -507,7 +581,10 @@ export default function Home() {
                       {/* コメントエリア */}
                       {openCommentId === item.id && (
                         <tr>
-                          <td colSpan={4} className="bg-slate-50 p-0 border-b border-slate-800">
+                          <td
+                            colSpan={4}
+                            className="bg-slate-50 p-0 border-b border-slate-800"
+                          >
                             <CommentSection itemId={item.id} />
                           </td>
                         </tr>
@@ -519,6 +596,75 @@ export default function Home() {
             </table>
           </div>
         </div>
+
+        {/* ⚙️ 店舗設定モーダル（ダイアログ） */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl space-y-4 border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                  <Store className="w-5 h-5 text-emerald-600" />
+                  <span>店舗の設定</span>
+                </div>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 店舗追加フォーム */}
+              <form onSubmit={handleAddStore} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  placeholder="新しいお店の名前..."
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 active:scale-95 transition text-sm flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>追加</span>
+                </button>
+              </form>
+
+              {/* 登録済み店舗一覧 */}
+              <div className="space-y-2 max-h-60 overflow-y-auto pt-2">
+                <span className="text-xs font-semibold text-slate-500">
+                  登録中のお店一覧
+                </span>
+                {storeDocs.map((store) => (
+                  <div
+                    key={store.id}
+                    className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-800"
+                  >
+                    <span className="font-medium">{store.name}</span>
+                    <button
+                      onClick={() => handleDeleteStore(store.id)}
+                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                      title="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition text-sm"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
@@ -565,7 +711,9 @@ function CommentSection({ itemId }: { itemId: string }) {
     <div className="p-2.5 bg-slate-100/70 border-t border-slate-300 space-y-2">
       <div className="space-y-1 max-h-32 overflow-y-auto">
         {comments.length === 0 ? (
-          <p className="text-xs text-slate-400 italic px-1">コメントはまだありません。</p>
+          <p className="text-xs text-slate-400 italic px-1">
+            コメントはまだありません。
+          </p>
         ) : (
           comments.map((comment) => (
             <div
