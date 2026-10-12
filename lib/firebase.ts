@@ -27,17 +27,20 @@ export const requestNotificationPermission = async () => {
       return null;
     }
 
-    const messaging = getMessaging(app);
+    // ① まずブラウザの通知許可ダイアログをしっかり完了させる
     const permission = await Notification.requestPermission();
-    if (permission === "granted") {
-      const token = await getToken(messaging, {
-        vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
-      });
-      return token;
-    } else {
-      console.log("通知が拒否されました");
+    if (permission !== "granted") {
+      console.log("通知が許可されませんでした:", permission);
       return null;
     }
+
+    // ② 許可が得られた場合のみ Messaging の初期化とトークン取得を行う
+    const messaging = getMessaging(app);
+    const token = await getToken(messaging, {
+      vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+    });
+    
+    return token;
   } catch (error) {
     console.error("通知トークン取得エラー:", error);
     return null;
