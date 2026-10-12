@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import {
   collection,
   addDoc,
@@ -14,6 +14,13 @@ import {
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  User,
+} from "firebase/auth";
 import {
   Trash2,
   Plus,
@@ -30,6 +37,8 @@ import {
   Pencil,
   Check,
   Settings,
+  LogOut,
+  Lock,
 } from "lucide-react";
 
 // 優先度の定義
@@ -62,11 +71,19 @@ interface StoreItem {
 }
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [authError, setAuthError] = useState("");
+
   const [items, setItems] = useState<Item[]>([]);
   const [stores, setStores] = useState<string[]>([]);
   const [storeDocs, setStoreDocs] = useState<StoreItem[]>([]);
   const [text, setText] = useState("");
 
+  // 初期値は未選択（null）
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string>("中");
   const [dueDate, setDueDate] = useState<string>("");
@@ -89,8 +106,55 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // Firestoreから店舗一覧をリアルタイム取得
+  // 1. ユーザーのログイン状態を監視
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ログイン / 新規登録 処理
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    try {
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      setEmail("");
+      setPassword("");
+    } catch (err: any) {
+      if (err.code === "auth/invalid-email") {
+        setAuthError("無効なメールアドレスの形式です。");
+      } else if (
+        err.code === "auth/wrong-password" ||
+        err.code === "auth/invalid-credential"
+      ) {
+        setAuthError("メールアドレスまたはパスワードが正しくありません。");
+      } else if (err.code === "auth/user-not-found") {
+        setAuthError("ユーザーが見つかりません。新規登録をお試しください。");
+      } else if (err.code === "auth/email-already-in-use") {
+        setAuthError("このメールアドレスは既に登録されています。");
+      } else if (err.code === "auth/weak-password") {
+        setAuthError("パスワードは6文字以上で設定してください。");
+      } else {
+        setAuthError("認証エラーが発生しました: " + err.message);
+      }
+    }
+  };
+
+  // ログアウト処理
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
+
+  // 2. Firestoreから店舗一覧をリアルタイム取得（デフォルト追加なし）
+  useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: StoreItem[] = snapshot.docs.map((doc) => ({
@@ -102,10 +166,11 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
-  // Firestoreから買い物リストをリアルタイム取得
+  // 3. Firestoreから買い物リストをリアルタイム取得
   useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: Item[] = snapshot.docs.map((doc) => ({
@@ -116,7 +181,6 @@ export default function Home() {
         dueDate: doc.data().dueDate || "",
       }));
 
-      // 期限（昇順） ＞ 優先度（高→中→低） の順でソート
       list.sort((a, b) => {
         const dateA = a.dueDate || "";
         const dateB = b.dueDate || "";
@@ -136,7 +200,7 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // 店舗の追加（設定ダイアログ内）
   const handleAddStore = async (e: React.FormEvent) => {
@@ -226,10 +290,99 @@ export default function Home() {
     return item.store === filterStore;
   });
 
+  // ロード中表示
+  if (authLoading) {
+    return (
+      <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-slate-500 font-medium">読み込み中...</div>
+      </main>
+    );
+  }
+
+  // 🔒 未ログイン時：ログイン画面
+  if (!user) {
+    return (
+      <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-md w-full max-w-md space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
+              <Lock className="w-7 h-7" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800">
+              {isSignUp ? "アカウント新規作成" : "ログイン"}
+            </h1>
+            <p className="text-xs text-slate-500">
+              買い物リストを利用するにはログインが必要です
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+              {authError}
+            </div>
+          )}
+
+          <form onSubmit={handleAuth} className="space-y-4 text-sm">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                メールアドレス
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@email.com"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                パスワード
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="6文字以上"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
+            >
+              {isSignUp ? "新規登録する" : "ログイン"}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setAuthError("");
+              }}
+              className="text-xs font-medium text-emerald-600 hover:underline"
+            >
+              {isSignUp
+                ? "すでにアカウントをお持ちの方（ログイン）"
+                : "アカウントをお持ちでない方（新規登録）"}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  // 🔓 ログイン済み：買い物リスト本体画面
   return (
     <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
       <div className="max-w-2xl mx-auto">
-        {/* ヘッダー（設定ボタン付き） */}
+        {/* ヘッダー */}
         <header className="flex items-center justify-between mb-4 pt-2">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-100 rounded-xl">
@@ -239,15 +392,25 @@ export default function Home() {
               買い物リスト
             </h1>
           </div>
-          {/* お店設定ボタン */}
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
-            title="店舗設定"
-          >
-            <Settings className="w-4 h-4 text-slate-500" />
-            <span>お店設定</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+              title="店舗設定"
+            >
+              <Settings className="w-4 h-4 text-slate-500" />
+              <span>お店設定</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="p-2 bg-white border border-slate-200 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+              title="ログアウト"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>ログアウト</span>
+            </button>
+          </div>
         </header>
 
         {/* 登録フォーム */}
@@ -271,7 +434,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 店名タグ（店舗が0件の時のみ「※お店を設定してください」を表示） */}
+          {/* 店名タグ（店舗が0件の場合のみ「※お店を設定してください」を表示） */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
 
