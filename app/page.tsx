@@ -67,7 +67,6 @@ export default function Home() {
   const [storeDocs, setStoreDocs] = useState<StoreItem[]>([]);
   const [text, setText] = useState("");
 
-  // 初期値を null（未選択）に設定
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string>("中");
   const [dueDate, setDueDate] = useState<string>("");
@@ -90,7 +89,7 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // Firestoreから店舗一覧をリアルタイム取得（デフォルト自動登録なし）
+  // Firestoreから店舗一覧をリアルタイム取得
   useEffect(() => {
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -177,13 +176,12 @@ export default function Home() {
 
     await addDoc(collection(db, "items"), {
       text: text.trim(),
-      store: selectedStore || "その他", // 未選択時は「その他」として保存
+      store: selectedStore || "その他",
       priority: selectedPriority,
       dueDate: dueDate || "",
       createdAt: serverTimestamp(),
     });
 
-    // 登録完了後に初期化（お店選択も未選択 null に戻り「お店を設定してください」が再表示される）
     setText("");
     setSelectedStore(null);
     setSelectedPriority("中");
@@ -273,11 +271,11 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 店名タグ（未選択時は案内を表示） */}
+          {/* 店名タグ（店舗が0件の時のみ「※お店を設定してください」を表示） */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
 
-            {!selectedStore && (
+            {stores.length === 0 && (
               <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-medium animate-pulse flex-shrink-0">
                 ※お店を設定してください
               </span>
