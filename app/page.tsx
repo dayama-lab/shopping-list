@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { db, auth } from "@/lib/firebase";
+import { db, auth, requestNotificationPermission } from "@/lib/firebase";
 import {
   collection,
   addDoc,
@@ -46,6 +46,7 @@ import {
   ArrowLeft,
   Users,
   Copy,
+  Bell,
 } from "lucide-react";
 
 // 優先度の定義
@@ -128,7 +129,6 @@ export default function Home() {
         if (userSnap.exists() && userSnap.data().groupId) {
           setGroupId(userSnap.data().groupId);
         } else {
-          // 初期状態：ユーザー自身の UID をデフォルトグループIDとして自動設定
           const defaultGroupId = currentUser.uid;
           await setDoc(userRef, { groupId: defaultGroupId }, { merge: true });
           setGroupId(defaultGroupId);
@@ -217,6 +217,17 @@ export default function Home() {
     setIsGroupModalOpen(false);
   };
 
+  // 通知を有効化する関数
+  const handleEnableNotifications = async () => {
+    const token = await requestNotificationPermission();
+    if (token) {
+      alert("プッシュ通知が有効になりました！");
+      console.log("FCM Token:", token);
+    } else {
+      alert("通知の許可が得られませんでした。");
+    }
+  };
+
   // 自分のグループIDに復帰する処理
   const handleResetToMyOwnGroup = async () => {
     if (!user) return;
@@ -235,7 +246,7 @@ export default function Home() {
     setTimeout(() => setCopySuccessMessage(""), 2000);
   };
 
-  // 2. 店舗一覧取得（グループIDに紐づくサブコレクションから取得）
+  // 2. 店舗一覧取得
   useEffect(() => {
     if (!user || !groupId) return;
     const q = query(
@@ -254,7 +265,7 @@ export default function Home() {
     return () => unsubscribe();
   }, [user, groupId]);
 
-  // 3. 買い物リスト取得（グループIDに紐づくサブコレクションから取得）
+  // 3. 買い物リスト取得
   useEffect(() => {
     if (!user || !groupId) return;
     const q = query(
@@ -557,6 +568,16 @@ export default function Home() {
             </h1>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* 🔔 通知を有効にするボタン */}
+            <button
+              onClick={handleEnableNotifications}
+              className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+              title="通知設定"
+            >
+              <Bell className="w-4 h-4 text-emerald-600" />
+              <span className="hidden sm:inline">通知ON</span>
+            </button>
+
             <button
               onClick={() => setIsGroupModalOpen(true)}
               className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
@@ -928,7 +949,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* 現在参加中のグループID情報 */}
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
                 <span className="text-xs font-semibold text-slate-500 block">
                   現在のグループID（家族に共有するID）:
@@ -952,7 +972,6 @@ export default function Home() {
                 )}
               </div>
 
-              {/* 既存のグループIDへ参加フォーム */}
               <form onSubmit={handleJoinGroup} className="space-y-2">
                 <label className="block text-xs font-semibold text-slate-600">
                   家族のグループIDを入力して参加:
