@@ -42,12 +42,16 @@ export const requestNotificationPermission = async () => {
       return null;
     }
 
+    // サービスワーカーの準備完了を待つ
+    const registration = await navigator.serviceWorker.ready;
     const messaging = getMessaging(app);
-    // VAPIDキーを確実に読み込ませる（環境変数 ＋ 直接指定の二重ガード）
+
+    // VAPIDキーを直接文字列として確実に指定（環境変数の読み込み漏れを防止）
     const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "BJufpWiyLxRCVT2r3sJ68Tca1G2MBH27QhVR3OAd2vcQgurtBk2DT8pJV0oZYIJctH5MqSUUC8sqL2jlQTJbbHU";
 
     const token = await getToken(messaging, {
       vapidKey: vapidKey,
+      serviceWorkerRegistration: registration,
     });
 
     return token;
