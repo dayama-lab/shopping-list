@@ -1,0 +1,21 @@
+{
+  "name": "買い物リスト",
+  "short_name": "買い物リスト",
+  "description": "山田家で使えるリアルタイム買い物リスト",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/shoppinglist_アイコン.JPG",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "/shoppinglist_アイコン.JPG",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
