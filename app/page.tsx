@@ -32,16 +32,6 @@ import {
   Settings,
 } from "lucide-react";
 
-// デフォルトの店舗リスト
-const DEFAULT_STORES = [
-  "サミット",
-  "まいばすけっと",
-  "ドラッグストア",
-  "100均",
-  "AVE",
-  "その他",
-];
-
 // 優先度の定義
 const PRIORITIES = ["高", "中", "低"] as const;
 
@@ -76,7 +66,7 @@ export default function Home() {
   const [stores, setStores] = useState<string[]>([]);
   const [storeDocs, setStoreDocs] = useState<StoreItem[]>([]);
   const [text, setText] = useState("");
-  
+
   // 初期値を null（未選択）に設定
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string>("中");
@@ -100,25 +90,16 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // Firestoreから店舗一覧をリアルタイム取得（初期データなしの場合はデフォルト登録）
+  // Firestoreから店舗一覧をリアルタイム取得（デフォルト自動登録なし）
   useEffect(() => {
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      if (snapshot.empty) {
-        for (let i = 0; i < DEFAULT_STORES.length; i++) {
-          await addDoc(collection(db, "stores"), {
-            name: DEFAULT_STORES[i],
-            createdAt: serverTimestamp(),
-          });
-        }
-      } else {
-        const list: StoreItem[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          name: doc.data().name,
-        }));
-        setStoreDocs(list);
-        setStores(list.map((s) => s.name));
-      }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: StoreItem[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        name: doc.data().name,
+      }));
+      setStoreDocs(list);
+      setStores(list.map((s) => s.name));
     });
 
     return () => unsubscribe();
@@ -202,7 +183,7 @@ export default function Home() {
       createdAt: serverTimestamp(),
     });
 
-    // 登録完了後に初期化（お店選択も未選択 null に戻る）
+    // 登録完了後に初期化（お店選択も未選択 null に戻り「お店を設定してください」が再表示される）
     setText("");
     setSelectedStore(null);
     setSelectedPriority("中");
@@ -295,7 +276,7 @@ export default function Home() {
           {/* 店名タグ（未選択時は案内を表示） */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
-            
+
             {!selectedStore && (
               <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-medium animate-pulse flex-shrink-0">
                 ※お店を設定してください
@@ -644,21 +625,27 @@ export default function Home() {
                 <span className="text-xs font-semibold text-slate-500">
                   登録中のお店一覧
                 </span>
-                {storeDocs.map((store) => (
-                  <div
-                    key={store.id}
-                    className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-800"
-                  >
-                    <span className="font-medium">{store.name}</span>
-                    <button
-                      onClick={() => handleDeleteStore(store.id)}
-                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                      title="削除"
+                {storeDocs.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-2">
+                    登録されているお店はありません。上のフォームから追加してください。
+                  </p>
+                ) : (
+                  storeDocs.map((store) => (
+                    <div
+                      key={store.id}
+                      className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-800"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <span className="font-medium">{store.name}</span>
+                      <button
+                        onClick={() => handleDeleteStore(store.id)}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                        title="削除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="pt-2 border-t border-slate-100 flex justify-end">
