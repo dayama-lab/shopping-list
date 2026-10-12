@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // 🔑 認証（ログイン）機能
-import { getMessaging, getToken, isSupported } from "firebase/messaging"; // 🔔 プッシュ通知機能
+import { getAuth } from "firebase/auth";
+import { getMessaging, getToken, isSupported } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,20 +14,17 @@ const firebaseConfig = {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// エクスポート（他ファイルで使用）
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 // 🔔 通知の許可を得て FCM トークンを取得する関数
 export const requestNotificationPermission = async () => {
   try {
-    // 1. ブラウザの通知サポートチェック
     if (!("Notification" in window)) {
       alert("このブラウザは通知をサポートしていません。");
       return null;
     }
 
-    // 2. 通知権限の確認・要求
     let permission = Notification.permission;
     if (permission === "default") {
       permission = await Notification.requestPermission();
@@ -38,21 +35,29 @@ export const requestNotificationPermission = async () => {
       return null;
     }
 
-    // 3. FCM (Messaging) のサポートチェック
     const messagingSupported = await isSupported();
     if (!messagingSupported) {
       alert("この端末環境では FCM Messaging がサポートされていません。");
       return null;
     }
 
-    // 4. Messaging の初期化とトークン取得
+    // 🔑 VAPIDキー（公開鍵）を確実に取得
+    const rawVapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+    const vapidKey = (rawVapidKey && rawVapidKey.trim().length > 0)
+      ? rawVapidKey.trim()
+      : "BJufpWiyLxRCVT2r3sJ68Tca1G2MBH27QhVR3OAd2vcQgurtBk2DT8pJV0oZYIJctH5MqSUUC8sqL2jlQTJbbHU";
+
     const messaging = getMessaging(app);
-    const vapidKey =
-      process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY ||
-      "BJufpWiyLxRCVT2r3sJ68Tca1G2MBH27QhVR3OAd2vcQgurtBk2DT8pJV0oZYIJctH5MqSUUC8sqL2jlQTJbbHU";
+
+    // サービスワーカーが準備完了している場合はその登録情報も渡す
+    let swRegistration = undefined;
+    if ("serviceWorker" in navigator) {
+      swRegistration = await navigator.serviceWorker.ready;
+    }
 
     const token = await getToken(messaging, {
       vapidKey: vapidKey,
+      serviceWorkerRegistration: swRegistration,
     });
 
     return token;
