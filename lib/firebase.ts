@@ -27,19 +27,25 @@ export const requestNotificationPermission = async () => {
       return null;
     }
 
-    // ① まずブラウザの通知許可ダイアログをしっかり完了させる
-    const permission = await Notification.requestPermission();
+    // ① iOS/Safariの通知権限状態を確認・要求
+    let permission = Notification.permission;
+    if (permission === "default") {
+      permission = await Notification.requestPermission();
+    }
+
     if (permission !== "granted") {
-      console.log("通知が許可されませんでした:", permission);
+      console.log("通知が許可されていません:", permission);
       return null;
     }
 
-    // ② 許可が得られた場合のみ Messaging の初期化とトークン取得を行う
+    // ② Service Worker の準備完了を待ってから FCM トークンを取得
+    const registration = await navigator.serviceWorker.ready;
     const messaging = getMessaging(app);
     const token = await getToken(messaging, {
       vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: registration,
     });
-    
+
     return token;
   } catch (error) {
     console.error("通知トークン取得エラー:", error);
