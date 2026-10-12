@@ -21,13 +21,11 @@ export const auth = getAuth(app); // 🔑 ログイン用インスタンス（�
 // 🔔 通知の許可を得て FCM トークンを取得する関数
 export const requestNotificationPermission = async () => {
   try {
-    // 1. ブラウザの通知サポートチェック
     if (!("Notification" in window)) {
       alert("このブラウザは通知をサポートしていません。");
       return null;
     }
 
-    // 2. 通知権限の確認・獲得
     let permission = Notification.permission;
     if (permission === "default") {
       permission = await Notification.requestPermission();
@@ -38,17 +36,18 @@ export const requestNotificationPermission = async () => {
       return null;
     }
 
-    // 3. FCM (Messaging) のサポートチェック
     const messagingSupported = await isSupported();
     if (!messagingSupported) {
       alert("この端末環境では FCM Messaging がサポートされていません。");
       return null;
     }
 
-    // 4. Messaging の初期化とトークン取得
     const messaging = getMessaging(app);
+    // VAPIDキーを確実に読み込ませる（環境変数 ＋ 直接指定の二重ガード）
+    const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || "BJufpWiyLxRCVT2r3sJ68Tca1G2MBH27QhVR3OAd2vcQgurtBk2DT8pJV0oZYIJctH5MqSUUC8sqL2jlQTJbbHU";
+
     const token = await getToken(messaging, {
-      vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      vapidKey: vapidKey,
     });
 
     return token;
