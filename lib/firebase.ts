@@ -21,34 +21,40 @@ export const auth = getAuth(app); // 🔑 ログイン用インスタンス（�
 // 🔔 通知の許可を得て FCM トークンを取得する関数
 export const requestNotificationPermission = async () => {
   try {
-    const messagingSupported = await isSupported();
-    if (!messagingSupported) {
-      console.log("このブラウザは通知をサポートしていません");
+    // 1. ブラウザの通知サポートチェック
+    if (!("Notification" in window)) {
+      alert("このブラウザは通知をサポートしていません。");
       return null;
     }
 
-    // ① iOS/Safariの通知権限状態を確認・要求
+    // 2. 通知権限の確認・獲得
     let permission = Notification.permission;
     if (permission === "default") {
       permission = await Notification.requestPermission();
     }
 
     if (permission !== "granted") {
-      console.log("通知が許可されていません:", permission);
+      alert("通知が許可されませんでした。iPhoneの「設定」>「通知」>「買い物リスト」を確認してください。");
       return null;
     }
 
-    // ② Service Worker の準備完了を待ってから FCM トークンを取得
-    const registration = await navigator.serviceWorker.ready;
+    // 3. FCM (Messaging) のサポートチェック
+    const messagingSupported = await isSupported();
+    if (!messagingSupported) {
+      alert("この端末環境では FCM Messaging がサポートされていません。");
+      return null;
+    }
+
+    // 4. Messaging の初期化とトークン取得
     const messaging = getMessaging(app);
     const token = await getToken(messaging, {
       vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
-      serviceWorkerRegistration: registration,
     });
 
     return token;
-  } catch (error) {
-    console.error("通知トークン取得エラー:", error);
+  } catch (error: any) {
+    console.error("通知トークン取得エラー詳細:", error);
+    alert("トークン取得中にエラーが発生しました: " + (error?.message || error));
     return null;
   }
 };
