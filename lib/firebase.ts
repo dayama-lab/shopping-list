@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth"; // 🔑 getAuth を追加
+import { getAuth } from "firebase/auth"; // 🔑 ログイン認証
+import { getMessaging, getToken, isSupported } from "firebase/messaging"; // 🔔 プッシュ通知
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,5 +13,33 @@ const firebaseConfig = {
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// エクスポート（他ファイルで使えるようにする）
 export const db = getFirestore(app);
-export const auth = getAuth(app); // 🔑 auth インスタンスをエクスポート
+export const auth = getAuth(app); // 🔑 ログイン用インスタンス（残してあります！）
+
+// 🔔 通知の許可を得て FCM トークンを取得する関数
+export const requestNotificationPermission = async () => {
+  try {
+    const messagingSupported = await isSupported();
+    if (!messagingSupported) {
+      console.log("このブラウザは通知をサポートしていません");
+      return null;
+    }
+
+    const messaging = getMessaging(app);
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      const token = await getToken(messaging, {
+        vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+      });
+      return token;
+    } else {
+      console.log("通知が拒否されました");
+      return null;
+    }
+  } catch (error) {
+    console.error("通知トークン取得エラー:", error);
+    return null;
+  }
+};
