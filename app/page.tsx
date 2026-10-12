@@ -13,6 +13,8 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  getDoc,
+  setDoc,
 } from "firebase/firestore";
 import {
   onAuthStateChanged,
@@ -42,6 +44,8 @@ import {
   Lock,
   Mail,
   ArrowLeft,
+  Users,
+  Copy,
 } from "lucide-react";
 
 // 優先度の定義
@@ -79,9 +83,15 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  const [isResetPassword, setIsResetPassword] = useState(false); // 🔑 パスワードリセット画面フラグ
+  const [isResetPassword, setIsResetPassword] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [resetMessage, setResetMessage] = useState(""); // 🔑 リセットメール送信完了メッセージ
+  const [resetMessage, setResetMessage] = useState("");
+
+  // グループ管理用ステート
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [joinGroupIdInput, setJoinGroupIdInput] = useState("");
+  const [copySuccessMessage, setCopySuccessMessage] = useState("");
 
   const [items, setItems] = useState<Item[]>([]);
   const [stores, setStores] = useState<string[]>([]);
@@ -107,10 +117,25 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // 1. ユーザーのログイン状態を監視
+  // 1. ユーザーのログイン状態および所属グループ（familyId）の監視
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists() && userSnap.data().groupId) {
+          setGroupId(userSnap.data().groupId);
+        } else {
+          // 初期状態：ユーザー自身の UID をデフォルトグループIDとして自動設定
+          const defaultGroupId = currentUser.uid;
+          await setDoc(userRef, { groupId: defaultGroupId }, { merge: true });
+          setGroupId(defaultGroupId);
+        }
+      } else {
+        setGroupId(null);
+      }
       setAuthLoading(false);
     });
     return () => unsubscribe();
@@ -149,7 +174,7 @@ export default function Home() {
     }
   };
 
-  // 🔑 パスワード再設定メール送信処理
+  // パスワード再設定メール送信処理
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
@@ -179,10 +204,44 @@ export default function Home() {
     await signOut(auth);
   };
 
-  // 2. 店舗一覧取得
-  useEffect(() => {
+  // グループ参加・切り替え処理
+  const handleJoinGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !joinGroupIdInput.trim()) return;
+
+    const targetGroupId = joinGroupIdInput.trim();
+    const userRef = doc(db, "users", user.uid);
+    await setDoc(userRef, { groupId: targetGroupId }, { merge: true });
+    setGroupId(targetGroupId);
+    setJoinGroupIdInput("");
+    setIsGroupModalOpen(false);
+  };
+
+  // 自分のグループIDに復帰する処理
+  const handleResetToMyOwnGroup = async () => {
     if (!user) return;
-    const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
+    const myOwnGroup = user.uid;
+    const userRef = doc(db, "users", user.uid);
+    await setDoc(userRef, { groupId: myOwnGroup }, { merge: true });
+    setGroupId(myOwnGroup);
+    setIsGroupModalOpen(false);
+  };
+
+  // グループIDコピー機能
+  const copyGroupId = () => {
+    if (!groupId) return;
+    navigator.clipboard.writeText(groupId);
+    setCopySuccessMessage("コピーしました！");
+    setTimeout(() => setCopySuccessMessage(""), 2000);
+  };
+
+  // 2. 店舗一覧取得（グループIDに紐づくサブコレクションから取得）
+  useEffect(() => {
+    if (!user || !groupId) return;
+    const q = query(
+      collection(db, "groups", groupId, "stores"),
+      orderBy("createdAt", "asc")
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: StoreItem[] = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -193,12 +252,15 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, groupId]);
 
-  // 3. 買い物リスト取得
+  // 3. 買い物リスト取得（グループIDに紐づくサブコレクションから取得）
   useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
+    if (!user || !groupId) return;
+    const q = query(
+      collection(db, "groups", groupId, "items"),
+      orderBy("createdAt", "desc")
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: Item[] = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -227,17 +289,17 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, groupId]);
 
   const handleAddStore = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStoreName.trim()) return;
+    if (!groupId || !newStoreName.trim()) return;
     if (stores.includes(newStoreName.trim())) {
       alert("そのお店は既に登録されています");
       return;
     }
 
-    await addDoc(collection(db, "stores"), {
+    await addDoc(collection(db, "groups", groupId, "stores"), {
       name: newStoreName.trim(),
       createdAt: serverTimestamp(),
     });
@@ -245,7 +307,8 @@ export default function Home() {
   };
 
   const handleDeleteStore = async (storeId: string) => {
-    await deleteDoc(doc(db, "stores", storeId));
+    if (!groupId) return;
+    await deleteDoc(doc(db, "groups", groupId, "stores", storeId));
   };
 
   const setShortcutDate = (daysToAdd: number) => {
@@ -259,9 +322,9 @@ export default function Home() {
 
   const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!groupId || !text.trim()) return;
 
-    await addDoc(collection(db, "items"), {
+    await addDoc(collection(db, "groups", groupId, "items"), {
       text: text.trim(),
       store: selectedStore || "その他",
       priority: selectedPriority,
@@ -276,11 +339,13 @@ export default function Home() {
   };
 
   const deleteItem = async (id: string) => {
-    await deleteDoc(doc(db, "items", id));
+    if (!groupId) return;
+    await deleteDoc(doc(db, "groups", groupId, "items", id));
   };
 
   const updatePriority = async (id: string, newPriority: string) => {
-    const itemRef = doc(db, "items", id);
+    if (!groupId) return;
+    const itemRef = doc(db, "groups", groupId, "items", id);
     await updateDoc(itemRef, {
       priority: newPriority,
     });
@@ -292,7 +357,8 @@ export default function Home() {
   };
 
   const saveDueDate = async (id: string) => {
-    const itemRef = doc(db, "items", id);
+    if (!groupId) return;
+    const itemRef = doc(db, "groups", groupId, "items", id);
     await updateDoc(itemRef, {
       dueDate: editingDueDate.trim(),
     });
@@ -316,13 +382,11 @@ export default function Home() {
     );
   }
 
-  // 🔒 未ログイン時：ログイン画面 / パスワード再設定画面
+  // 未ログイン時：ログイン / パスワード再設定画面
   if (!user) {
     return (
       <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-md w-full max-w-md space-y-6">
-          
-          {/* 🔑 パスワード再設定モードの場合 */}
           {isResetPassword ? (
             <>
               <div className="text-center space-y-2">
@@ -388,7 +452,6 @@ export default function Home() {
               </div>
             </>
           ) : (
-            /* 🔓 通常の ログイン / 新規登録 モードの場合 */
             <>
               <div className="text-center space-y-2">
                 <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
@@ -475,13 +538,12 @@ export default function Home() {
               </div>
             </>
           )}
-
         </div>
       </main>
     );
   }
 
-  // 🔓 ログイン済み：買い物リスト本体画面
+  // ログイン済み：買い物リスト本体画面
   return (
     <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
       <div className="max-w-2xl mx-auto">
@@ -494,14 +556,23 @@ export default function Home() {
               買い物リスト
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={() => setIsGroupModalOpen(true)}
+              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+              title="グループ設定"
+            >
+              <Users className="w-4 h-4 text-emerald-600" />
+              <span className="hidden sm:inline">グループ</span>
+            </button>
+
             <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
               title="店舗設定"
             >
               <Settings className="w-4 h-4 text-slate-500" />
-              <span>お店設定</span>
+              <span className="hidden sm:inline">お店設定</span>
             </button>
 
             <button
@@ -510,11 +581,12 @@ export default function Home() {
               title="ログアウト"
             >
               <LogOut className="w-4 h-4" />
-              <span>ログアウト</span>
+              <span className="hidden sm:inline">ログアウト</span>
             </button>
           </div>
         </header>
 
+        {/* 登録フォーム */}
         <form
           onSubmit={addItem}
           className="bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-xs mb-4 space-y-3"
@@ -654,6 +726,7 @@ export default function Home() {
           </div>
         </form>
 
+        {/* 絞り込みタブ */}
         <div className="mb-3">
           <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5 font-medium">
             <Filter className="w-3.5 h-3.5" />
@@ -677,6 +750,7 @@ export default function Home() {
           </div>
         </div>
 
+        {/* テーブル表示 */}
         <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse table-fixed">
@@ -825,7 +899,7 @@ export default function Home() {
                             colSpan={4}
                             className="bg-slate-50 p-0 border-b border-slate-800"
                           >
-                            <CommentSection itemId={item.id} />
+                            <CommentSection itemId={item.id} groupId={groupId} />
                           </td>
                         </tr>
                       )}
@@ -837,6 +911,93 @@ export default function Home() {
           </div>
         </div>
 
+        {/* グループ設定ダイアログ (モーダル) */}
+        {isGroupModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl space-y-5 border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                  <Users className="w-5 h-5 text-emerald-600" />
+                  <span>グループ（部屋）設定</span>
+                </div>
+                <button
+                  onClick={() => setIsGroupModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 現在参加中のグループID情報 */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                <span className="text-xs font-semibold text-slate-500 block">
+                  現在のグループID（家族に共有するID）:
+                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="text-xs font-mono bg-white px-2.5 py-1.5 rounded border border-slate-200 text-slate-800 break-all select-all flex-1">
+                    {groupId}
+                  </code>
+                  <button
+                    onClick={copyGroupId}
+                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition flex items-center gap-1 flex-shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>コピー</span>
+                  </button>
+                </div>
+                {copySuccessMessage && (
+                  <p className="text-[11px] text-emerald-600 font-medium pt-0.5">
+                    {copySuccessMessage}
+                  </p>
+                )}
+              </div>
+
+              {/* 既存のグループIDへ参加フォーム */}
+              <form onSubmit={handleJoinGroup} className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-600">
+                  家族のグループIDを入力して参加:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={joinGroupIdInput}
+                    onChange={(e) => setJoinGroupIdInput(e.target.value)}
+                    placeholder="グループIDを貼り付け..."
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 active:scale-95 transition text-xs"
+                  >
+                    参加
+                  </button>
+                </div>
+              </form>
+
+              {user && groupId !== user.uid && (
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    onClick={handleResetToMyOwnGroup}
+                    className="text-xs text-amber-600 hover:underline font-medium"
+                  >
+                    自分専用のグループに戻す
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setIsGroupModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition text-sm"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 店舗設定ダイアログ (モーダル) */}
         {isSettingsOpen && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl space-y-4 border border-slate-200">
@@ -913,13 +1074,21 @@ export default function Home() {
   );
 }
 
-function CommentSection({ itemId }: { itemId: string }) {
+// コメント欄コンポーネント
+function CommentSection({
+  itemId,
+  groupId,
+}: {
+  itemId: string;
+  groupId: string | null;
+}) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
 
   useEffect(() => {
+    if (!groupId) return;
     const q = query(
-      collection(db, "items", itemId, "comments"),
+      collection(db, "groups", groupId, "items", itemId, "comments"),
       orderBy("createdAt", "asc")
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -932,21 +1101,27 @@ function CommentSection({ itemId }: { itemId: string }) {
     });
 
     return () => unsubscribe();
-  }, [itemId]);
+  }, [itemId, groupId]);
 
   const addComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
+    if (!groupId || !commentText.trim()) return;
 
-    await addDoc(collection(db, "items", itemId, "comments"), {
-      text: commentText.trim(),
-      createdAt: serverTimestamp(),
-    });
+    await addDoc(
+      collection(db, "groups", groupId, "items", itemId, "comments"),
+      {
+        text: commentText.trim(),
+        createdAt: serverTimestamp(),
+      }
+    );
     setCommentText("");
   };
 
   const deleteComment = async (commentId: string) => {
-    await deleteDoc(doc(db, "items", itemId, "comments", commentId));
+    if (!groupId) return;
+    await deleteDoc(
+      doc(db, "groups", groupId, "items", itemId, "comments", commentId)
+    );
   };
 
   return (
