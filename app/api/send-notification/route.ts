@@ -1,24 +1,5 @@
 import { NextResponse } from "next/server";
 
-// Next.js のビルドエラーを防ぐため require を使用
-const admin = require("firebase-admin");
-
-if (!admin.apps.length) {
-  try {
-    const serviceAccount = JSON.parse(
-      process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "{}"
-    );
-
-    if (serviceAccount.project_id) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-    }
-  } catch (error) {
-    console.error("Firebase admin initialization error:", error);
-  }
-}
-
 export async function POST(request: Request) {
   try {
     const { token, title, body } = await request.json();
@@ -30,7 +11,26 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!admin.apps || !admin.apps.length) {
+    // ビルドエラーを防ぐため、リクエスト実行時に動的に firebase-admin を読み込む
+    const admin = require("firebase-admin");
+
+    if (!admin.apps.length) {
+      try {
+        const serviceAccount = JSON.parse(
+          process.env.FIREBASE_SERVICE_ACCOUNT_KEY || "{}"
+        );
+
+        if (serviceAccount.project_id) {
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+          });
+        }
+      } catch (initError) {
+        console.error("Firebase admin initialization error:", initError);
+      }
+    }
+
+    if (!admin.apps.length) {
       return NextResponse.json(
         { error: "Firebase Admin SDK is not initialized" },
         { status: 500 }
