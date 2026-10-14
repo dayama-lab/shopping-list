@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { db, auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import {
   collection,
   addDoc,
@@ -12,37 +12,17 @@ import {
   query,
   orderBy,
   serverTimestamp,
-  Timestamp,
 } from "firebase/firestore";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  User,
-} from "firebase/auth";
 import {
   Trash2,
   Plus,
   ShoppingBag,
-  MessageSquare,
-  Send,
-  ChevronDown,
-  ChevronUp,
   Store,
-  Filter,
   Calendar,
-  AlertCircle,
-  X,
   Pencil,
   Check,
   Settings,
-  LogOut,
-  Lock,
 } from "lucide-react";
-
-// 優先度の定義
-const PRIORITIES = ["高", "中", "低"] as const;
 
 // 優先度の重み付け（並び替え用）
 const PRIORITY_WEIGHT: Record<string, number> = {
@@ -50,12 +30,6 @@ const PRIORITY_WEIGHT: Record<string, number> = {
   中: 2,
   低: 1,
 };
-
-interface Comment {
-  id: string;
-  text: string;
-  createdAt: Timestamp | null;
-}
 
 interface Item {
   id: string;
@@ -71,13 +45,6 @@ interface StoreItem {
 }
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [authError, setAuthError] = useState("");
-
   const [items, setItems] = useState<Item[]>([]);
   const [stores, setStores] = useState<string[]>([]);
   const [storeDocs, setStoreDocs] = useState<StoreItem[]>([]);
@@ -87,14 +54,16 @@ export default function Home() {
   const [selectedPriority, setSelectedPriority] = useState<string>("中");
   const [dueDate, setDueDate] = useState<string>("");
   const [filterStore, setFilterStore] = useState<string>("すべて");
-  const [openCommentId, setOpenCommentId] = useState<string | null>(null);
 
+  // 設定ダイアログの開閉と入力状態
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [newStoreName, setNewStoreName] = useState("");
 
+  // 期限の編集状態管理
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDueDate, setEditingDueDate] = useState<string>("");
 
+  // 日付フォーマット整形
   const formatDateInput = (value: string) => {
     const nums = value.replace(/\D/g, "");
     if (nums.length <= 4) return nums;
@@ -102,51 +71,8 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
+  // 店舗一覧をリアルタイム取得
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError("");
-    try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-      setEmail("");
-      setPassword("");
-    } catch (err: any) {
-      if (err.code === "auth/invalid-email") {
-        setAuthError("無効なメールアドレスの形式です。");
-      } else if (
-        err.code === "auth/wrong-password" ||
-        err.code === "auth/invalid-credential"
-      ) {
-        setAuthError("メールアドレスまたはパスワードが正しくありません。");
-      } else if (err.code === "auth/user-not-found") {
-        setAuthError("ユーザーが見つかりません。新規登録をお試しください。");
-      } else if (err.code === "auth/email-already-in-use") {
-        setAuthError("このメールアドレスは既に登録されています。");
-      } else if (err.code === "auth/weak-password") {
-        setAuthError("パスワードは6文字以上で設定してください。");
-      } else {
-        setAuthError("認証エラーが発生しました: " + err.message);
-      }
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-  };
-
-  useEffect(() => {
-    if (!user) return;
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: StoreItem[] = snapshot.docs.map((doc) => ({
@@ -156,12 +82,11 @@ export default function Home() {
       setStoreDocs(list);
       setStores(list.map((s) => s.name));
     });
-
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
+  // 買い物リストをリアルタイム取得＆ソート
   useEffect(() => {
-    if (!user) return;
     const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: Item[] = snapshot.docs.map((doc) => ({
@@ -172,6 +97,7 @@ export default function Home() {
         dueDate: doc.data().dueDate || "",
       }));
 
+      // 期限（昇順） ＞ 優先度（高→中→低） の順でソート
       list.sort((a, b) => {
         const dateA = a.dueDate || "";
         const dateB = b.dueDate || "";
@@ -189,10 +115,10 @@ export default function Home() {
 
       setItems(list);
     });
-
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
+  // 店舗の追加
   const handleAddStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStoreName.trim()) return;
@@ -200,7 +126,6 @@ export default function Home() {
       alert("そのお店は既に登録されています");
       return;
     }
-
     await addDoc(collection(db, "stores"), {
       name: newStoreName.trim(),
       createdAt: serverTimestamp(),
@@ -208,10 +133,12 @@ export default function Home() {
     setNewStoreName("");
   };
 
+  // 店舗の削除
   const handleDeleteStore = async (storeId: string) => {
     await deleteDoc(doc(db, "stores", storeId));
   };
 
+  // 日付ショートカット
   const setShortcutDate = (daysToAdd: number) => {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + daysToAdd);
@@ -221,6 +148,7 @@ export default function Home() {
     setDueDate(`${yyyy}/${mm}/${dd}`);
   };
 
+  // アイテムの追加
   const addItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
@@ -239,10 +167,12 @@ export default function Home() {
     setDueDate("");
   };
 
+  // アイテムの削除
   const deleteItem = async (id: string) => {
     await deleteDoc(doc(db, "items", id));
   };
 
+  // 優先度の直接変更
   const updatePriority = async (id: string, newPriority: string) => {
     const itemRef = doc(db, "items", id);
     await updateDoc(itemRef, {
@@ -250,11 +180,13 @@ export default function Home() {
     });
   };
 
+  // 期限の編集開始
   const startEditingDueDate = (id: string, currentDueDate: string) => {
     setEditingId(id);
     setEditingDueDate(currentDueDate || "");
   };
 
+  // 期限の保存
   const saveDueDate = async (id: string) => {
     const itemRef = doc(db, "items", id);
     await updateDoc(itemRef, {
@@ -263,192 +195,89 @@ export default function Home() {
     setEditingId(null);
   };
 
-  const toggleComment = (id: string) => {
-    setOpenCommentId(openCommentId === id ? null : id);
-  };
-
+  // フィルター適用
   const filteredItems = items.filter((item) => {
     if (filterStore === "すべて") return true;
     return item.store === filterStore;
   });
 
-  if (authLoading) {
-    return (
-      <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-slate-500 font-medium">読み込み中...</div>
-      </main>
-    );
-  }
-
-  if (!user) {
-    return (
-      <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-md w-full max-w-md space-y-6">
-          <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
-              <Lock className="w-7 h-7" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-800">
-              {isSignUp ? "アカウント新規作成" : "ログイン"}
-            </h1>
-            <p className="text-xs text-slate-500">
-              買い物リストを利用するにはログインが必要です
-            </p>
-          </div>
-
-          {authError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
-              {authError}
-            </div>
-          )}
-
-          <form onSubmit={handleAuth} className="space-y-4 text-sm">
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                メールアドレス
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="example@email.com"
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
-                パスワード
-              </label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="6文字以上"
-                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
-            >
-              {isSignUp ? "新規登録する" : "ログイン"}
-            </button>
-          </form>
-
-          <div className="pt-2 border-t border-slate-100 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setAuthError("");
-              }}
-              className="text-xs font-medium text-emerald-600 hover:underline"
-            >
-              {isSignUp
-                ? "すでにアカウントをお持ちの方（ログイン）"
-                : "アカウントをお持ちでない方（新規登録）"}
-            </button>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
-      <div className="max-w-2xl mx-auto">
+    <main className="w-full min-h-screen bg-slate-50 p-3 pb-20">
+      <div className="max-w-md mx-auto">
+        {/* ヘッダー */}
         <header className="flex items-center justify-between mb-4 pt-2">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-100 rounded-xl">
-              <ShoppingBag className="w-6 h-6 text-emerald-600" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
-              買い物リスト
-            </h1>
+            <ShoppingBag className="w-6 h-6 text-emerald-600" />
+            <h1 className="text-xl font-bold text-slate-800">買い物リスト</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
-              title="店舗設定"
-            >
-              <Settings className="w-4 h-4 text-slate-500" />
-              <span>お店設定</span>
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className="p-2 bg-white border border-slate-200 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
-              title="ログアウト"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>ログアウト</span>
-            </button>
-          </div>
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-100 transition"
+          >
+            <Settings className="w-4 h-4 text-slate-500" />
+            お店設定
+          </button>
         </header>
 
+        {/* 登録フォーム */}
         <form
           onSubmit={addItem}
-          className="bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-xs mb-4 space-y-3"
+          className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm mb-4 space-y-3"
         >
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="買うものを入力..."
-              className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
-            />
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-xs active:scale-95 transition flex items-center justify-center min-w-[50px]"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="買うものを入力..."
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
-
-            {stores.length === 0 && (
-              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-medium animate-pulse flex-shrink-0">
-                ※お店を設定してください
-              </span>
-            )}
-
-            {stores.map((storeName) => (
+          {/* お店選択 */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 block mb-1">
+              買うお店
+            </label>
+            <div className="flex flex-wrap gap-1.5">
               <button
-                key={storeName}
                 type="button"
-                onClick={() =>
-                  setSelectedStore(selectedStore === storeName ? null : storeName)
-                }
-                className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
-                  selectedStore === storeName
-                    ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
+                onClick={() => setSelectedStore(null)}
+                className={`px-2.5 py-1 text-xs rounded-lg border transition ${
+                  selectedStore === null
+                    ? "bg-slate-800 text-white border-slate-800 font-medium"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                 }`}
               >
-                {storeName}
+                ※お店を設定してください
               </button>
-            ))}
+              {stores.map((store) => (
+                <button
+                  key={store}
+                  type="button"
+                  onClick={() => setSelectedStore(store)}
+                  className={`px-2.5 py-1 text-xs rounded-lg border transition ${
+                    selectedStore === store
+                      ? "bg-emerald-600 text-white border-emerald-600 font-medium"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {store}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
-            <span className="text-slate-500 font-medium flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" /> 優先度:
-            </span>
-            <div className="flex gap-1">
-              {PRIORITIES.map((p) => (
+          {/* 優先度選択 */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 block mb-1">
+              優先度
+            </label>
+            <div className="flex gap-2">
+              {(["高", "中", "低"] as const).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setSelectedPriority(p)}
-                  className={`px-2.5 py-0.5 rounded font-medium border transition ${
+                  className={`flex-1 py-1 text-xs rounded-lg border font-medium transition ${
                     selectedPriority === p
                       ? p === "高"
                         ? "bg-red-500 text-white border-red-500"
@@ -464,268 +293,200 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="space-y-1.5 pt-1 text-xs">
-            <div className="flex items-center gap-1 text-slate-500 font-medium">
-              <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
+          {/* 期限入力 ＆ ショートカット ＆ クリア */}
+          <div>
+            <label className="text-xs font-bold text-slate-500 block mb-1">
+              期限 (YYYY/MM/DD)
+            </label>
+            <div className="flex gap-2 items-center mb-1.5">
+              <input
+                type="text"
+                value={dueDate}
+                onChange={(e) => setDueDate(formatDateInput(e.target.value))}
+                placeholder="例: 2026/06/15"
+                maxLength={10}
+                className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={() => setDueDate("")}
+                className="px-2.5 py-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs rounded-lg border border-slate-200 font-medium"
+                title="未選択（-）にする"
+              >
+                - クリア
+              </button>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => setShortcutDate(0)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] rounded border border-slate-200"
               >
                 今日
               </button>
               <button
                 type="button"
                 onClick={() => setShortcutDate(1)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] rounded border border-slate-200"
               >
                 明日
               </button>
               <button
                 type="button"
-                onClick={() => setShortcutDate(3)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+                onClick={() => setShortcutDate(2)}
+                className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] rounded border border-slate-200"
               >
-                3日後
+                明後日
               </button>
-              <button
-                type="button"
-                onClick={() => setShortcutDate(7)}
-                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
-              >
-                1週後
-              </button>
-              <button
-                type="button"
-                onClick={() => setDueDate("")}
-                className="px-2 py-1 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-500 border border-slate-200 rounded font-medium transition"
-              >
-                なし
-              </button>
-
-              <div className="flex items-center gap-1 ml-auto">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(formatDateInput(e.target.value))}
-                  placeholder="20261001"
-                  maxLength={10}
-                  className="w-28 px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-                {dueDate && (
-                  <button
-                    type="button"
-                    onClick={() => setDueDate("")}
-                    className="p-1 text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded"
-                    title="クリア"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
             </div>
           </div>
+
+          {/* 登録ボタン */}
+          <button
+            type="submit"
+            className="w-full py-2.5 bg-emerald-600 text-white font-medium rounded-xl shadow-sm hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center gap-1 text-sm mt-2"
+          >
+            <Plus className="w-4 h-4" />
+            リストに追加
+          </button>
         </form>
 
-        <div className="mb-3">
-          <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5 font-medium">
-            <Filter className="w-3.5 h-3.5" />
-            <span>表示するお店で絞り込み:</span>
+        {/* 店舗絞り込みフィルター */}
+        <div className="mb-4 overflow-x-auto pb-1">
+          <div className="flex gap-1.5 min-w-max">
+            <button
+              onClick={() => setFilterStore("すべて")}
+              className={`px-3 py-1.5 text-xs rounded-xl border transition font-medium ${
+                filterStore === "すべて"
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              すべて ({items.length})
+            </button>
+            {stores.map((store) => {
+              const count = items.filter((i) => i.store === store).length;
+              return (
+                <button
+                  key={store}
+                  onClick={() => setFilterStore(store)}
+                  className={`px-3 py-1.5 text-xs rounded-xl border transition font-medium ${
+                    filterStore === store
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {store} ({count})
+                </button>
+              );
+            })}
           </div>
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
-            {["すべて", ...stores].map((storeName) => (
-              <button
-                key={storeName}
-                type="button"
-                onClick={() => setFilterStore(storeName)}
-                className={`px-2.5 py-1 rounded-full whitespace-nowrap border transition ${
-                  filterStore === storeName
-                    ? "bg-slate-800 text-white border-slate-800 font-medium shadow-xs"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                }`}
+        </div>
+
+        {/* リスト一覧 */}
+        <div className="space-y-2.5">
+          {filteredItems.length === 0 ? (
+            <p className="text-center text-slate-400 py-8 text-sm bg-white rounded-xl border border-slate-200">
+              該当するアイテムはありません 🎉
+            </p>
+          ) : (
+            filteredItems.map((item) => (
+              <div
+                key={item.id}
+                className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-2"
               >
-                {storeName}
-              </button>
-            ))}
-          </div>
-        </div>
+                {/* 品名とメタ情報 */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-slate-800 font-medium text-sm break-all leading-snug mb-1">
+                    {item.text}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600 border border-slate-200 font-mono">
+                      {item.store ? item.store.slice(0, 2) : "その他"}
+                    </span>
 
-        <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse table-fixed">
-              <thead>
-                <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs font-bold">
-                  <th className="py-2.5 px-2 border-r border-slate-800 w-[35%] text-center">
-                    必要なもの
-                  </th>
-                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[17%]">
-                    お店
-                  </th>
-                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[23%]">
-                    優先度
-                  </th>
-                  <th className="py-2.5 px-1 text-center w-[25%]">期限</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800 text-xs">
-                {filteredItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="text-center text-slate-400 py-8">
-                      {filterStore === "すべて"
-                        ? "買うものはすべて揃っています 🎉"
-                        : `「${filterStore}」で買うものはありません 🎉`}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredItems.map((item) => (
-                    <React.Fragment key={item.id}>
-                      <tr className="hover:bg-slate-50/80 transition">
-                        <td className="p-2 border-r border-slate-800 align-middle">
-                          <div className="flex flex-col gap-1">
-                            <span className="font-bold text-slate-800 text-sm break-all leading-tight">
-                              {item.text}
-                            </span>
-                            <div className="flex items-center gap-2 pt-0.5">
-                              <button
-                                onClick={() => toggleComment(item.id)}
-                                className={`flex items-center gap-0.5 text-[11px] p-0.5 rounded transition ${
-                                  openCommentId === item.id
-                                    ? "text-emerald-700 bg-emerald-100"
-                                    : "text-emerald-600 hover:bg-emerald-50"
-                                }`}
-                                title="コメント"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                                {openCommentId === item.id ? (
-                                  <ChevronUp className="w-3 h-3" />
-                                ) : (
-                                  <ChevronDown className="w-3 h-3" />
-                                )}
-                              </button>
-                              <button
-                                onClick={() => deleteItem(item.id)}
-                                className="text-slate-400 hover:text-red-500 p-0.5 rounded hover:bg-red-50 transition"
-                                title="削除"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="p-1 border-r border-slate-800 align-middle text-center">
-                          <span className="inline-block px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
-                            {item.store ? item.store.slice(0, 2) : "その"}
-                          </span>
-                        </td>
-
-                        <td className="p-1 border-r border-slate-800 text-center align-middle">
-                          <div className="flex justify-center gap-0.5">
-                            {PRIORITIES.map((p) => {
-                              const isSelected = (item.priority || "中") === p;
-                              return (
-                                <button
-                                  key={p}
-                                  onClick={() => updatePriority(item.id, p)}
-                                  className={`px-1.5 py-0.5 rounded text-[11px] font-bold border transition ${
-                                    isSelected
-                                      ? p === "高"
-                                        ? "bg-red-500 text-white border-red-500 shadow-2xs"
-                                        : p === "中"
-                                        ? "bg-amber-500 text-white border-amber-500 shadow-2xs"
-                                        : "bg-blue-500 text-white border-blue-500 shadow-2xs"
-                                      : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200"
-                                  }`}
-                                  title={`優先度を「${p}」に変更`}
-                                >
-                                  {p}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </td>
-
-                        <td className="p-1 text-center align-middle text-slate-700 font-mono text-[11px] sm:text-xs">
-                          {editingId === item.id ? (
-                            <div className="flex items-center justify-center gap-1">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={editingDueDate}
-                                onChange={(e) =>
-                                  setEditingDueDate(formatDateInput(e.target.value))
-                                }
-                                maxLength={10}
-                                className="w-20 px-1 py-0.5 text-[11px] border border-emerald-500 rounded bg-white text-slate-800 focus:outline-none"
-                                placeholder="20261001"
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => saveDueDate(item.id)}
-                                className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition"
-                                title="保存"
-                              >
-                                <Check className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => setEditingId(null)}
-                                className="p-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 transition"
-                                title="キャンセル"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1 group">
-                              <span>{item.dueDate || "-"}</span>
-                              <button
-                                onClick={() =>
-                                  startEditingDueDate(item.id, item.dueDate || "")
-                                }
-                                className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition"
-                                title="期限を編集"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-
-                      {openCommentId === item.id && (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="bg-slate-50 p-0 border-b border-slate-800"
-                          >
-                            <CommentSection itemId={item.id} />
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {isSettingsOpen && (
-          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl space-y-4 border border-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">
-                  <Store className="w-5 h-5 text-emerald-600" />
-                  <span>店舗の設定</span>
+                    {editingId === item.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={editingDueDate}
+                          onChange={(e) =>
+                            setEditingDueDate(formatDateInput(e.target.value))
+                          }
+                          placeholder="YYYY/MM/DD"
+                          className="w-24 px-1.5 py-0.5 border border-emerald-500 rounded text-xs bg-white text-slate-800 focus:outline-none"
+                        />
+                        <button
+                          onClick={() => saveDueDate(item.id)}
+                          className="p-1 bg-emerald-600 text-white rounded hover:bg-emerald-700"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          startEditingDueDate(item.id, item.dueDate || "")
+                        }
+                        className="flex items-center gap-1 hover:text-slate-800 transition"
+                      >
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        <span>{item.dueDate || "-"}</span>
+                        <Pencil className="w-2.5 h-2.5 text-slate-400" />
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* 優先度変更バッジ */}
+                <div className="flex items-center gap-1.5">
+                  <div className="flex border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                    {(["高", "中", "低"] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => updatePriority(item.id, p)}
+                        className={`px-2 py-1 text-[11px] font-medium transition ${
+                          item.priority === p
+                            ? p === "高"
+                              ? "bg-red-500 text-white"
+                              : p === "中"
+                              ? "bg-amber-500 text-white"
+                              : "bg-blue-500 text-white"
+                            : "text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => deleteItem(item.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                    title="削除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* お店設定モーダル */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Store className="w-5 h-5 text-emerald-600" />
+                  お店の追加・削除
+                </h2>
                 <button
                   onClick={() => setIsSettingsOpen(false)}
-                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                  className="text-slate-400 hover:text-slate-600 text-sm font-bold px-2 py-1"
                 >
-                  <X className="w-5 h-5" />
+                  ✕ 閉じる
                 </button>
               </div>
 
@@ -735,136 +496,39 @@ export default function Home() {
                   value={newStoreName}
                   onChange={(e) => setNewStoreName(e.target.value)}
                   placeholder="新しいお店の名前..."
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 active:scale-95 transition text-sm flex items-center gap-1"
+                  className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-xl hover:bg-emerald-700 transition"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>追加</span>
+                  追加
                 </button>
               </form>
 
-              <div className="space-y-2 max-h-60 overflow-y-auto pt-2">
-                <span className="text-xs font-semibold text-slate-500">
-                  登録中のお店一覧
-                </span>
-                {storeDocs.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic py-2">
-                    登録されているお店はありません。上のフォームから追加してください。
-                  </p>
-                ) : (
-                  storeDocs.map((store) => (
-                    <div
-                      key={store.id}
-                      className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-800"
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {storeDocs.map((store) => (
+                  <div
+                    key={store.id}
+                    className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-xl border border-slate-100 text-sm"
+                  >
+                    <span className="text-slate-700 font-medium">
+                      {store.name}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteStore(store.id)}
+                      className="text-slate-400 hover:text-red-500 p-1 rounded transition"
+                      title="削除"
                     >
-                      <span className="font-medium">{store.name}</span>
-                      <button
-                        onClick={() => handleDeleteStore(store.id)}
-                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
-                        title="削除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 flex justify-end">
-                <button
-                  onClick={() => setIsSettingsOpen(false)}
-                  className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition text-sm"
-                >
-                  閉じる
-                </button>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         )}
       </div>
     </main>
-  );
-}
-
-function CommentSection({ itemId }: { itemId: string }) {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [commentText, setCommentText] = useState("");
-
-  useEffect(() => {
-    const q = query(
-      collection(db, "items", itemId, "comments"),
-      orderBy("createdAt", "asc")
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: Comment[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        text: doc.data().text || "",
-        createdAt: doc.data().createdAt || null,
-      }));
-      setComments(list);
-    });
-
-    return () => unsubscribe();
-  }, [itemId]);
-
-  const addComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
-
-    await addDoc(collection(db, "items", itemId, "comments"), {
-      text: commentText.trim(),
-      createdAt: serverTimestamp(),
-    });
-    setCommentText("");
-  };
-
-  const deleteComment = async (commentId: string) => {
-    await deleteDoc(doc(db, "items", itemId, "comments", commentId));
-  };
-
-  return (
-    <div className="p-2.5 bg-slate-100/70 border-t border-slate-300 space-y-2">
-      <div className="space-y-1 max-h-32 overflow-y-auto">
-        {comments.length === 0 ? (
-          <p className="text-xs text-slate-400 italic px-1">
-            コメントはまだありません。
-          </p>
-        ) : (
-          comments.map((comment) => (
-            <div
-              key={comment.id}
-              className="flex items-center justify-between bg-white p-1.5 rounded border border-slate-200 text-xs text-slate-700 shadow-2xs"
-            >
-              <p className="break-all pr-2">{comment.text}</p>
-              <button
-                onClick={() => deleteComment(comment.id)}
-                className="text-slate-300 hover:text-red-500 p-0.5 rounded transition flex-shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
-      <form onSubmit={addComment} className="flex gap-1.5">
-        <input
-          type="text"
-          value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
-          placeholder="コメントを入力..."
-          className="flex-1 px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        />
-        <button
-          type="submit"
-          className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
-        >
-          <Send className="w-3.5 h-3.5 text-white" />
-        </button>
-      </form>
-    </div>
   );
 }
