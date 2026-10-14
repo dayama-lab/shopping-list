@@ -118,25 +118,27 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // 1. ユーザーのログイン状態および所属グループ（familyId）の監視
+  // 1. ユーザーのログイン状態の監視（※画面ロックを解除するため getDoc の完了を待たない）
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        const userRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userRef);
+      setAuthLoading(false); // 認証確認後、すぐにメイン画面のレイアウトを表示
 
-        if (userSnap.exists() && userSnap.data().groupId) {
-          setGroupId(userSnap.data().groupId);
-        } else {
-          const defaultGroupId = currentUser.uid;
-          await setDoc(userRef, { groupId: defaultGroupId }, { merge: true });
-          setGroupId(defaultGroupId);
-        }
+      if (currentUser) {
+        // グループIDの取得はバックグラウンド非同期処理として動かす
+        const userRef = doc(db, "users", currentUser.uid);
+        getDoc(userRef).then(async (userSnap) => {
+          if (userSnap.exists() && userSnap.data().groupId) {
+            setGroupId(userSnap.data().groupId);
+          } else {
+            const defaultGroupId = currentUser.uid;
+            await setDoc(userRef, { groupId: defaultGroupId }, { merge: true });
+            setGroupId(defaultGroupId);
+          }
+        });
       } else {
         setGroupId(null);
       }
-      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -631,28 +633,33 @@ export default function Home() {
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
             <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
 
-            {stores.length === 0 && (
+            {/* グループID・店舗データの読み込み中スケルトン / 案内 */}
+            {!groupId ? (
+              <span className="text-xs text-slate-400 animate-pulse px-2 py-1">
+                お店を読み込み中...
+              </span>
+            ) : stores.length === 0 ? (
               <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-medium animate-pulse flex-shrink-0">
                 ※お店を設定してください
               </span>
+            ) : (
+              stores.map((storeName) => (
+                <button
+                  key={storeName}
+                  type="button"
+                  onClick={() =>
+                    setSelectedStore(selectedStore === storeName ? null : storeName)
+                  }
+                  className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
+                    selectedStore === storeName
+                      ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  {storeName}
+                </button>
+              ))
             )}
-
-            {stores.map((storeName) => (
-              <button
-                key={storeName}
-                type="button"
-                onClick={() =>
-                  setSelectedStore(selectedStore === storeName ? null : storeName)
-                }
-                className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
-                  selectedStore === storeName
-                    ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
-                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                {storeName}
-              </button>
-            ))}
           </div>
 
           <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
@@ -790,7 +797,13 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-xs">
-                {filteredItems.length === 0 ? (
+                {!groupId ? (
+                  <tr>
+                    <td colSpan={4} className="text-center text-slate-400 py-8">
+                      データを読み込み中...
+                    </td>
+                  </tr>
+                ) : filteredItems.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="text-center text-slate-400 py-8">
                       {filterStore === "すべて"
@@ -955,11 +968,12 @@ export default function Home() {
                 </span>
                 <div className="flex items-center justify-between gap-2">
                   <code className="text-xs font-mono bg-white px-2.5 py-1.5 rounded border border-slate-200 text-slate-800 break-all select-all flex-1">
-                    {groupId}
+                    {groupId || "読み込み中..."}
                   </code>
                   <button
                     onClick={copyGroupId}
-                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition flex items-center gap-1 flex-shrink-0"
+                    disabled={!groupId}
+                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition flex items-center gap-1 flex-shrink-0 disabled:opacity-50"
                   >
                     <Copy className="w-3.5 h-3.5" />
                     <span>コピー</span>
