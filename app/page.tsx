@@ -219,12 +219,12 @@ export default function Home() {
     setIsGroupModalOpen(false);
   };
 
-  // 通知を有効化する関数
+// 通知を有効化する関数
   const handleEnableNotifications = async () => {
-    const token = await requestNotificationPermission();
+    if (!user) return;
+    const token = await requestNotificationPermission(user.uid);
     if (token) {
       alert("プッシュ通知が有効になりました！");
-      console.log("FCM Token:", token);
     } else {
       alert("通知の許可が得られませんでした。");
     }
@@ -324,7 +324,7 @@ export default function Home() {
     await deleteDoc(doc(db, "groups", groupId, "stores", storeId));
   };
 
-  const setShortcutDate = (daysToAdd: number) => {
+   const setShortcutDate = (daysToAdd: number) => {
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + daysToAdd);
     const yyyy = targetDate.getFullYear();
@@ -333,17 +333,54 @@ export default function Home() {
     setDueDate(`${yyyy}/${mm}/${dd}`);
   };
 
-  const addItem = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!groupId || !text.trim()) return;
 
-    await addDoc(collection(db, "groups", groupId, "items"), {
-      text: text.trim(),
-      store: selectedStore || "その他",
-      priority: selectedPriority,
-      dueDate: dueDate || "",
-      createdAt: serverTimestamp(),
+
+// -------------------------------------------------------------
+// 👇 1. 通知送信用のヘルパー関数（setShortcutDate の下あたりに追加）
+// -------------------------------------------------------------
+const sendGroupNotification = async (title: string, body: string) => {
+  if (!groupId || !user) return;
+  try {
+    await fetch("/api/send-notification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        groupId,
+        senderUid: user.uid,
+        title,
+        body,
+      }),
     });
+  } catch (err) {
+    console.error("通知送信エラー:", err);
+  }
+};
+
+// -------------------------------------------------------------
+// 👇 2. アイテム追加関数（既存の addItem をこれで上書き）
+// -------------------------------------------------------------
+const addItem = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!groupId || !text.trim()) return;
+
+  const itemText = text.trim();
+
+  await addDoc(collection(db, "groups", groupId, "items"), {
+    text: itemText,
+    store: selectedStore || "その他",
+    priority: selectedPriority,
+    dueDate: dueDate || "",
+    createdAt: serverTimestamp(),
+  });
+
+  // 🔔 自分以外の家族メンバーへ通知を送信
+  sendGroupNotification("買い物リスト追加 🛒", `「${itemText}」が追加されました`);
+
+  setText("");
+  setSelectedStore(null);
+  setSelectedPriority("中");
+  setDueDate("");
+};
 
     setText("");
     setSelectedStore(null);
