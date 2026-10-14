@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import * as admin from "firebase-admin";
+
+// Next.js のビルドエラーを防ぐため require を使用
+const admin = require("firebase-admin");
 
 if (!admin.apps.length) {
   try {
@@ -28,7 +30,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!admin.apps.length) {
+    if (!admin.apps || !admin.apps.length) {
       return NextResponse.json(
         { error: "Firebase Admin SDK is not initialized" },
         { status: 500 }
