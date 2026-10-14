@@ -18,7 +18,6 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   signOut,
   User,
 } from "firebase/auth";
@@ -40,8 +39,6 @@ import {
   Settings,
   LogOut,
   Lock,
-  Mail,
-  ArrowLeft,
 } from "lucide-react";
 
 // 優先度の定義
@@ -79,9 +76,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  const [isResetPassword, setIsResetPassword] = useState(false);
   const [authError, setAuthError] = useState("");
-  const [resetMessage, setResetMessage] = useState("");
 
   const [items, setItems] = useState<Item[]>([]);
   const [stores, setStores] = useState<string[]>([]);
@@ -107,7 +102,6 @@ export default function Home() {
     return `${nums.slice(0, 4)}/${nums.slice(4, 6)}/${nums.slice(6, 8)}`;
   };
 
-  // 1. ユーザーのログイン状態を監視
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -116,11 +110,9 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // ログイン / 新規登録 処理
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
-    setResetMessage("");
     try {
       if (isSignUp) {
         await createUserWithEmailAndPassword(auth, email, password);
@@ -149,37 +141,10 @@ export default function Home() {
     }
   };
 
-  // 🔑 パスワード再設定メール送信処理
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError("");
-    setResetMessage("");
-    if (!email.trim()) {
-      setAuthError("メールアドレスを入力してください。");
-      return;
-    }
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setResetMessage(
-        "パスワード再設定用のメールを送信しました。メール内のリンクから再設定を行ってください。"
-      );
-    } catch (err: any) {
-      if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
-        setAuthError("このメールアドレスは登録されていません。");
-      } else if (err.code === "auth/invalid-email") {
-        setAuthError("無効なメールアドレスの形式です。");
-      } else {
-        setAuthError("送信エラーが発生しました: " + err.message);
-      }
-    }
-  };
-
-  // ログアウト処理
   const handleLogout = async () => {
     await signOut(auth);
   };
 
-  // 2. 店舗一覧取得
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "stores"), orderBy("createdAt", "asc"));
@@ -195,7 +160,6 @@ export default function Home() {
     return () => unsubscribe();
   }, [user]);
 
-  // 3. 買い物リスト取得
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "items"), orderBy("createdAt", "desc"));
@@ -316,141 +280,354 @@ export default function Home() {
     );
   }
 
-  // 🔒 未ログイン時：ログイン画面 / パスワード再設定画面
   if (!user) {
     return (
       <main className="w-full min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-md w-full max-w-md space-y-6">
-          
-          {isResetPassword ? (
-            <>
-              <div className="text-center space-y-2">
-                <div className="inline-flex p-3 bg-amber-100 text-amber-600 rounded-2xl mb-1">
-                  <Mail className="w-7 h-7" />
-                </div>
-                <h1 className="text-2xl font-bold text-slate-800">
-                  パスワードの再設定
-                </h1>
-                <p className="text-xs text-slate-500">
-                  ご登録のメールアドレスを入力してください。<br />
-                  再設定用のリンクをお送りします。
-                </p>
-              </div>
+          <div className="text-center space-y-2">
+            <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
+              <Lock className="w-7 h-7" />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-800">
+              {isSignUp ? "アカウント新規作成" : "ログイン"}
+            </h1>
+            <p className="text-xs text-slate-500">
+              買い物リストを利用するにはログインが必要です
+            </p>
+          </div>
 
-              {authError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
-                  {authError}
-                </div>
-              )}
+          {authError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+              {authError}
+            </div>
+          )}
 
-              {resetMessage && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-medium leading-relaxed">
-                  {resetMessage}
-                </div>
-              )}
+          <form onSubmit={handleAuth} className="space-y-4 text-sm">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                メールアドレス
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@email.com"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              />
+            </div>
 
-              <form onSubmit={handleResetPassword} className="space-y-4 text-sm">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    メールアドレス
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="example@email.com"
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-                  />
-                </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                パスワード
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="6文字以上"
+                className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+              />
+            </div>
 
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
+            >
+              {isSignUp ? "新規登録する" : "ログイン"}
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setAuthError("");
+              }}
+              className="text-xs font-medium text-emerald-600 hover:underline"
+            >
+              {isSignUp
+                ? "すでにアカウントをお持ちの方（ログイン）"
+                : "アカウントをお持ちでない方（新規登録）"}
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="w-full min-h-screen bg-slate-50 p-2 sm:p-6 pb-20">
+      <div className="max-w-2xl mx-auto">
+        <header className="flex items-center justify-between mb-4 pt-2">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-100 rounded-xl">
+              <ShoppingBag className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
+              買い物リスト
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+              title="店舗設定"
+            >
+              <Settings className="w-4 h-4 text-slate-500" />
+              <span>お店設定</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="p-2 bg-white border border-slate-200 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-xl shadow-2xs transition flex items-center gap-1 text-xs font-medium"
+              title="ログアウト"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>ログアウト</span>
+            </button>
+          </div>
+        </header>
+
+        <form
+          onSubmit={addItem}
+          className="bg-white p-3 sm:p-4 rounded-xl border border-slate-300 shadow-xs mb-4 space-y-3"
+        >
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="買うものを入力..."
+              className="flex-1 px-3 py-2.5 border border-slate-300 rounded-xl bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm sm:text-base"
+            />
+            <button
+              type="submit"
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-xs active:scale-95 transition flex items-center justify-center min-w-[50px]"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <Store className="w-4 h-4 text-slate-400 flex-shrink-0 mr-0.5" />
+
+            {stores.length === 0 && (
+              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg font-medium animate-pulse flex-shrink-0">
+                ※お店を設定してください
+              </span>
+            )}
+
+            {stores.map((storeName) => (
+              <button
+                key={storeName}
+                type="button"
+                onClick={() =>
+                  setSelectedStore(selectedStore === storeName ? null : storeName)
+                }
+                className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition border ${
+                  selectedStore === storeName
+                    ? "bg-emerald-600 text-white font-medium border-emerald-600 shadow-xs"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                {storeName}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs">
+            <span className="text-slate-500 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5" /> 優先度:
+            </span>
+            <div className="flex gap-1">
+              {PRIORITIES.map((p) => (
                 <button
-                  type="submit"
-                  className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
-                >
-                  再設定メールを送信
-                </button>
-              </form>
-
-              <div className="pt-2 border-t border-slate-100 text-center">
-                <button
+                  key={p}
                   type="button"
-                  onClick={() => {
-                    setIsResetPassword(false);
-                    setAuthError("");
-                    setResetMessage("");
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-800"
+                  onClick={() => setSelectedPriority(p)}
+                  className={`px-2.5 py-0.5 rounded font-medium border transition ${
+                    selectedPriority === p
+                      ? p === "高"
+                        ? "bg-red-500 text-white border-red-500"
+                        : p === "中"
+                        ? "bg-amber-500 text-white border-amber-500"
+                        : "bg-blue-500 text-white border-blue-500"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" /> ログイン画面に戻る
+                  {p}
                 </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5 pt-1 text-xs">
+            <div className="flex items-center gap-1 text-slate-500 font-medium">
+              <Calendar className="w-3.5 h-3.5" /> <span>期限（日付）:</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShortcutDate(0)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                今日
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortcutDate(1)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                明日
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortcutDate(3)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                3日後
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortcutDate(7)}
+                className="px-2 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 border border-slate-200 rounded font-medium transition"
+              >
+                1週後
+              </button>
+              <button
+                type="button"
+                onClick={() => setDueDate("")}
+                className="px-2 py-1 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-500 border border-slate-200 rounded font-medium transition"
+              >
+                なし
+              </button>
+
+              <div className="flex items-center gap-1 ml-auto">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(formatDateInput(e.target.value))}
+                  placeholder="20261001"
+                  maxLength={10}
+                  className="w-28 px-2 py-1 border border-slate-300 rounded bg-white text-slate-700 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                {dueDate && (
+                  <button
+                    type="button"
+                    onClick={() => setDueDate("")}
+                    className="p-1 text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded"
+                    title="クリア"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
-            </>
-          ) : (
-            <>
-              <div className="text-center space-y-2">
-                <div className="inline-flex p-3 bg-emerald-100 text-emerald-600 rounded-2xl mb-1">
-                  <Lock className="w-7 h-7" />
-                </div>
-                <h1 className="text-2xl font-bold text-slate-800">
-                  {isSignUp ? "アカウント新規作成" : "ログイン"}
-                </h1>
-                <p className="text-xs text-slate-500">
-                  買い物リストを利用するにはログインが必要です
-                </p>
-              </div>
+            </div>
+          </div>
+        </form>
 
-              {authError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
-                  {authError}
-                </div>
-              )}
+        <div className="mb-3">
+          <div className="flex items-center gap-1 text-xs text-slate-500 mb-1.5 font-medium">
+            <Filter className="w-3.5 h-3.5" />
+            <span>表示するお店で絞り込み:</span>
+          </div>
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+            {["すべて", ...stores].map((storeName) => (
+              <button
+                key={storeName}
+                type="button"
+                onClick={() => setFilterStore(storeName)}
+                className={`px-2.5 py-1 rounded-full whitespace-nowrap border transition ${
+                  filterStore === storeName
+                    ? "bg-slate-800 text-white border-slate-800 font-medium shadow-xs"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {storeName}
+              </button>
+            ))}
+          </div>
+        </div>
 
-              <form onSubmit={handleAuth} className="space-y-4 text-sm">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    メールアドレス
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="example@email.com"
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-                  />
-                </div>
+        <div className="bg-white rounded-xl border border-slate-800 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse table-fixed">
+              <thead>
+                <tr className="border-b-2 border-slate-800 bg-slate-50 text-slate-800 text-xs font-bold">
+                  <th className="py-2.5 px-2 border-r border-slate-800 w-[35%] text-center">
+                    必要なもの
+                  </th>
+                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[17%]">
+                    お店
+                  </th>
+                  <th className="py-2.5 px-1 border-r border-slate-800 text-center w-[23%]">
+                    優先度
+                  </th>
+                  <th className="py-2.5 px-1 text-center w-[25%]">期限</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-xs">
+                {filteredItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="text-center text-slate-400 py-8">
+                      {filterStore === "すべて"
+                        ? "買うものはすべて揃っています 🎉"
+                        : `「${filterStore}」で買うものはありません 🎉`}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredItems.map((item) => (
+                    <React.Fragment key={item.id}>
+                      <tr className="hover:bg-slate-50/80 transition">
+                        <td className="p-2 border-r border-slate-800 align-middle">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-bold text-slate-800 text-sm break-all leading-tight">
+                              {item.text}
+                            </span>
+                            <div className="flex items-center gap-2 pt-0.5">
+                              <button
+                                onClick={() => toggleComment(item.id)}
+                                className={`flex items-center gap-0.5 text-[11px] p-0.5 rounded transition ${
+                                  openCommentId === item.id
+                                    ? "text-emerald-700 bg-emerald-100"
+                                    : "text-emerald-600 hover:bg-emerald-50"
+                                }`}
+                                title="コメント"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                {openCommentId === item.id ? (
+                                  <ChevronUp className="w-3 h-3" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => deleteItem(item.id)}
+                                className="text-slate-400 hover:text-red-500 p-0.5 rounded hover:bg-red-50 transition"
+                                title="削除"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
 
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-semibold text-slate-600">
-                      パスワード
-                    </label>
-                    {!isSignUp && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsResetPassword(true);
-                          setAuthError("");
-                        }}
-                        className="text-[11px] text-emerald-600 hover:underline font-medium"
-                      >
-                        パスワードをお忘れの方
-                      </button>
-                    )}
-                  </div>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="6文字以上"
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
-                  />
-                </div>
+                        <td className="p-1 border-r border-slate-800 align-middle text-center">
+                          <span className="inline-block px-2 py-0.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full">
+                            {item.store ? item.store.slice(0, 2) : "その"}
+                          </span>
+                        </td>
 
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-xs transition active:scale-98"
-                >
-                  {is
+                        <td className="p-1 border-r border-slate-800 text-center align-middle">
+                          <div className="flex justify-center gap-0.5">
+                            {PRIORITIES.map((p) => {
+                              const isSelected = (item.priority || "中") === p;
+                              return (
+                                <button
+                                  key={p}
+                                  onClick={() => updatePriority(item.id, p)}
+                                  className={`px-1.5 py-0.5 rounded text
