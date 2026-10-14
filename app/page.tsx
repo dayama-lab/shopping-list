@@ -789,4 +789,82 @@ export default function Home() {
   );
 }
 
-function CommentSection({
+function CommentSection({ itemId }: { itemId: string }) {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState("");
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "items", itemId, "comments"),
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: Comment[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        text: doc.data().text || "",
+        createdAt: doc.data().createdAt || null,
+      }));
+      setComments(list);
+    });
+
+    return () => unsubscribe();
+  }, [itemId]);
+
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+
+    await addDoc(collection(db, "items", itemId, "comments"), {
+      text: commentText.trim(),
+      createdAt: serverTimestamp(),
+    });
+    setCommentText("");
+  };
+
+  const deleteComment = async (commentId: string) => {
+    await deleteDoc(doc(db, "items", itemId, "comments", commentId));
+  };
+
+  return (
+    <div className="p-2.5 bg-slate-100/70 border-t border-slate-300 space-y-2">
+      <div className="space-y-1 max-h-32 overflow-y-auto">
+        {comments.length === 0 ? (
+          <p className="text-xs text-slate-400 italic px-1">
+            コメントはまだありません。
+          </p>
+        ) : (
+          comments.map((comment) => (
+            <div
+              key={comment.id}
+              className="flex items-center justify-between bg-white p-1.5 rounded border border-slate-200 text-xs text-slate-700 shadow-2xs"
+            >
+              <p className="break-all pr-2">{comment.text}</p>
+              <button
+                onClick={() => deleteComment(comment.id)}
+                className="text-slate-300 hover:text-red-500 p-0.5 rounded transition flex-shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <form onSubmit={addComment} className="flex gap-1.5">
+        <input
+          type="text"
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="コメントを入力..."
+          className="flex-1 px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+        <button
+          type="submit"
+          className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
+        >
+          <Send className="w-3.5 h-3.5 text-white" />
+        </button>
+      </form>
+    </div>
+  );
+}
