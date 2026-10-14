@@ -984,4 +984,241 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="p
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                <span className="text-xs font-semibold text-slate-500 block">
+                  現在のグループID（家族に共有するID）:
+                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="text-xs font-mono bg-white px-2.5 py-1.5 rounded border border-slate-200 text-slate-800 break-all select-all flex-1">
+                    {groupId || "読み込み中..."}
+                  </code>
+                  <button
+                    onClick={copyGroupId}
+                    disabled={!groupId}
+                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition flex items-center gap-1 flex-shrink-0 disabled:opacity-50"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>コピー</span>
+                  </button>
+                </div>
+                {copySuccessMessage && (
+                  <p className="text-[11px] text-emerald-600 font-medium pt-0.5">
+                    {copySuccessMessage}
+                  </p>
+                )}
+              </div>
+
+              <form onSubmit={handleJoinGroup} className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-600">
+                  家族のグループIDを入力して参加:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={joinGroupIdInput}
+                    onChange={(e) => setJoinGroupIdInput(e.target.value)}
+                    placeholder="グループIDを貼り付け..."
+                    className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 active:scale-95 transition text-xs"
+                  >
+                    参加
+                  </button>
+                </div>
+              </form>
+
+              {user && groupId !== user.uid && (
+                <div className="pt-2 border-t border-slate-100">
+                  <button
+                    onClick={handleResetToMyOwnGroup}
+                    className="text-xs text-amber-600 hover:underline font-medium"
+                  >
+                    自分専用のグループに戻す
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setIsGroupModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition text-sm"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 店舗設定モーダル */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+            <div className="bg-white w-full max-w-md rounded-2xl p-5 shadow-xl space-y-4 border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 font-bold text-slate-800 text-lg">
+                  <Store className="w-5 h-5 text-emerald-600" />
+                  <span>店舗の設定</span>
+                </div>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddStore} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newStoreName}
+                  onChange={(e) => setNewStoreName(e.target.value)}
+                  placeholder="新しいお店の名前..."
+                  className="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-800"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 active:scale-95 transition text-sm flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>追加</span>
+                </button>
+              </form>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pt-2">
+                <span className="text-xs font-semibold text-slate-500">
+                  登録中のお店一覧
+                </span>
+                {storeDocs.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-2">
+                    登録されているお店はありません。上のフォームから追加してください。
+                  </p>
+                ) : (
+                  storeDocs.map((store) => (
+                    <div
+                      key={store.id}
+                      className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm text-slate-800"
+                    >
+                      <span className="font-medium">{store.name}</span>
+                      <button
+                        onClick={() => handleDeleteStore(store.id)}
+                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
+                        title="削除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition text-sm"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+// コメント欄コンポーネント
+function CommentSection({
+  itemId,
+  groupId,
+}: {
+  itemId: string;
+  groupId: string | null;
+}) {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState("");
+
+  useEffect(() => {
+    if (!groupId) return;
+    const q = query(
+      collection(db, "groups", groupId, "items", itemId, "comments"),
+      orderBy("createdAt", "asc")
+    );
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: Comment[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        text: doc.data().text || "",
+        createdAt: doc.data().createdAt || null,
+      }));
+      setComments(list);
+    });
+
+    return () => unsubscribe();
+  }, [itemId, groupId]);
+
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!groupId || !commentText.trim()) return;
+
+    await addDoc(
+      collection(db, "groups", groupId, "items", itemId, "comments"),
+      {
+        text: commentText.trim(),
+        createdAt: serverTimestamp(),
+      }
+    );
+    setCommentText("");
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!groupId) return;
+    await deleteDoc(
+      doc(db, "groups", groupId, "items", itemId, "comments", commentId)
+    );
+  };
+
+  return (
+    <div className="p-2.5 bg-slate-100/70 border-t border-slate-300 space-y-2">
+      <div className="space-y-1 max-h-32 overflow-y-auto">
+        {comments.length === 0 ? (
+          <p className="text-xs text-slate-400 italic px-1">
+            コメントはまだありません。
+          </p>
+        ) : (
+          comments.map((comment) => (
+            <div
+              key={comment.id}
+              className="flex items-center justify-between bg-white p-1.5 rounded border border-slate-200 text-xs text-slate-700 shadow-2xs"
+            >
+              <p className="break-all pr-2">{comment.text}</p>
+              <button
+                onClick={() => deleteComment(comment.id)}
+                className="text-slate-300 hover:text-red-500 p-0.5 rounded transition flex-shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <form onSubmit={addComment} className="flex gap-1.5">
+        <input
+          type="text"
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          placeholder="コメントを入力..."
+          className="flex-1 px-2.5 py-1.5 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        />
+        <button
+          type="submit"
+          className="px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center"
+        >
+          <Send className="w-3.5 h-3.5 text-white" />
+        </button>
+      </form>
+    </div>
+  );
+}
